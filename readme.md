@@ -1,4 +1,4 @@
-# Generador de series de tiempo 
+# Generador de series de tiempo mensuales (últimos 30 días)
 
 Este programa genera las series de tiempo de la data de las estaciones convencionales de la red meteorológica nacional. 
 
