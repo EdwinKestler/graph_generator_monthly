@@ -81,6 +81,7 @@ for estacion in estaciones:
     formatters = {
         '@x': 'datetime'
     }
+    #Hola
     hover = HoverTool(names=['lluvia', 'tseca', 'tmin', 'tmax'], tooltips=tooltips, formatters=formatters
                         )
     fig.add_tools(hover)
