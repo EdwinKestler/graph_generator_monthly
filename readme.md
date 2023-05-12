@@ -5,11 +5,9 @@ Este programa genera las series de tiempo de la data de las estaciones convencio
 Las series de tiempo que genera son de precipitación, temperatura media, máxima y mínima. 
 
 
-Utilizando las bibliotecas pandas, bokeh y json.
+Utilizando las bibliotecas pandas, bokeh y selenium.
 
-Para guardar los html como imagen se debe de especficiar donde está en driver de chrome 
-Por ejemplo
-    export PATH=$PATH:/home/rainy/Downloads/chromedriver_linux64
+Para guardar los html como imagen (png) se debe de especficiar donde está en driver de chrome. (Dentro del programa).
 
 Este puede ser descargado desde: 
     https://chromedriver.chromium.org/
