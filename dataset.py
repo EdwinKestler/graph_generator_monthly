@@ -16,6 +16,7 @@ directory2 = "output/img_output/"
 # Leer el archivo CSV de entrada
 df = pd.read_csv('database.csv', header=0, delimiter=',')
 
+
 # Convertir la columna FECHA a formato datetime y ordenar el dataframe
 df['fecha'] = pd.to_datetime(df['fecha'], format="%d/%m/%Y")
 
@@ -29,8 +30,10 @@ thirty_days_ago = latest_date - pd.Timedelta(days=30)
 last_30_days_data = df[df['fecha'] >= thirty_days_ago]
 last_30_days_data = last_30_days_data.sort_values("fecha")
 
+last_30_days_data[['Nombre']] = last_30_days_data[['Nombre']].replace('_', ' ', regex=True)
 # Obtener la lista de estaciones disponibles en el dataframe
 estaciones = last_30_days_data["Nombre"].unique()
+
 
 # Crear un gráfico y un archivo HTML para cada estación
 for estacion in estaciones:
@@ -85,7 +88,7 @@ for estacion in estaciones:
     formatters = {
         '@x': 'datetime'
     }
-    #Hola
+    
     hover = HoverTool(names=['lluvia', 'tseca', 'tmin', 'tmax','hum_rel'], tooltips=tooltips, formatters=formatters
                         )
     fig.add_tools(hover)
@@ -99,4 +102,4 @@ for estacion in estaciones:
     export_png(fig, filename=f"{directory2}{estacion}.png")
 
 
-
+ 

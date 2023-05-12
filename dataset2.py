@@ -28,6 +28,7 @@ thirty_days_ago = latest_date - pd.Timedelta(days=30)
 last_30_days_data = df[df['fecha'] >= thirty_days_ago]
 last_30_days_data = last_30_days_data.sort_values("fecha")
 
+last_30_days_data[['Nombre']] = last_30_days_data[['Nombre']].replace('_', ' ', regex=True)
 # Obtener la lista de estaciones disponibles en el dataframe
 estaciones = last_30_days_data["Nombre"].unique()
 
