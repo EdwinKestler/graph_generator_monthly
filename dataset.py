@@ -10,8 +10,8 @@ from selenium import webdriver
 driver = webdriver.Chrome(executable_path='settings_driver/chromedriver')
 
 # Directorios de entrada y salida
-directory = "output/"
-directory2 = "img/"
+directory = "html_output/"
+directory2 = "img_output/"
 
 # Leer el archivo CSV de entrada
 df = pd.read_csv('database.csv', header=0, delimiter=',')
@@ -92,7 +92,7 @@ for estacion in estaciones:
     fig.legend.label_text_font_size = "8pt"
     fig.legend.spacing = 1
     save(fig)
-    export_png(fig, filename=f"{directory}{estacion}.png")
+    export_png(fig, filename=f"{directory2}{estacion}.png")
 
 
 
