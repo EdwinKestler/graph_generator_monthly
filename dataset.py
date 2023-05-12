@@ -10,8 +10,8 @@ from selenium import webdriver
 driver = webdriver.Chrome(executable_path='settings_driver/chromedriver')
 
 # Directorios de entrada y salida
-directory = "html_output/"
-directory2 = "img_output/"
+directory = "output/html_output/"
+directory2 = "output/img_output/"
 
 # Leer el archivo CSV de entrada
 df = pd.read_csv('database.csv', header=0, delimiter=',')
@@ -42,6 +42,7 @@ for estacion in estaciones:
     tmin=gk.get_group(estacion)['tmin']
     tseca=gk.get_group(estacion)['tseca']
     tmax=gk.get_group(estacion)['tmax']
+    hum_rel=gk.get_group(estacion)['hum_rel']
     fecha=gk.get_group(estacion)['fecha']
 
     fig = figure(x_axis_type='datetime', title=estacion, plot_height=400, plot_width=800, toolbar_location='below',
@@ -60,7 +61,7 @@ for estacion in estaciones:
 
     # agregar las líneas y los círculos
     fig.line(fecha, lluvia, line_color='navy', line_width=1, legend_label='Precipitación',
-                name='precip')
+                name='lluvia')
 
     fig.line(fecha, tseca, line_color='seagreen', line_width=1, line_dash='dashed', legend_label='Temperatura media', 
                 name='tseca',y_range_name='temp_range')
@@ -68,6 +69,9 @@ for estacion in estaciones:
                 legend_label='Temperatura min', name='tmin',y_range_name='temp_range')
     fig.circle(fecha, tmax, fill_color='firebrick', line_color='red', size=3,
                 legend_label='Temperatura max', name='tmax',y_range_name='temp_range')
+
+    fig.line(fecha, hum_rel, line_color='orange', line_width=1, line_dash='dashed', legend_label='Temperatura media', 
+                name='hum_rel')
 
     fig.legend.location = 'top_left'
     fig.title.text_font_size = '10pt'
@@ -82,7 +86,7 @@ for estacion in estaciones:
         '@x': 'datetime'
     }
     #Hola
-    hover = HoverTool(names=['lluvia', 'tseca', 'tmin', 'tmax'], tooltips=tooltips, formatters=formatters
+    hover = HoverTool(names=['lluvia', 'tseca', 'tmin', 'tmax','hum_rel'], tooltips=tooltips, formatters=formatters
                         )
     fig.add_tools(hover)
 

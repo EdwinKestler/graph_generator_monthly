@@ -12,6 +12,16 @@ Para guardar los html como imagen (png) se debe de especficiar donde está en dr
 Este puede ser descargado desde: 
     https://chromedriver.chromium.org/
 
+Los dos programas existes son dataset.py y dataset2.py 
+
+## Salidas
+
+En output están los html e imagenes de temperatura mínima, temperatura max y temperatura media. 
+
+En output2 están los html e imagenes de temperatura mínima, temperatura max y humedad relativa. 
+
+
+
 Ejemplo de la salida de este programa:
 
 ![Gráfica](https://raw.githubusercontent.com/Climatologia-INSIVUMEH/dataset/master/img/COBAN.png?token=GHSAT0AAAAAAB5LMDEBJ45DQTYINQXPSGVCZA3IDJQ)
