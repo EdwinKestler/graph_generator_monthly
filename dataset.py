@@ -2,7 +2,6 @@ from bokeh.models import Range1d, LinearAxis
 from bokeh.models.tools import HoverTool
 from bokeh.plotting import figure, output_file
 import pandas as pd
-import json
 from bokeh.io import export_png, save
 from selenium import webdriver
 
