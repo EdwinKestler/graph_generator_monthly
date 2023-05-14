@@ -92,7 +92,7 @@ for estacion in estaciones:
     fig.legend.label_text_font_size = "8pt"
     fig.legend.spacing = 1
     save(fig)
-    export_png(fig, filename=f"{directory2}{estacion}.png")
+    # export_png(fig, filename=f"{directory2}{estacion}.png")
 
 
 
