@@ -72,8 +72,8 @@ for estacion in estaciones:
     fig.circle(fecha, tmax, fill_color='firebrick', line_color='red', size=3,
                 legend_label='Temperatura max', name='tmax',y_range_name='temp_range')
 
-    fig.line(fecha, hum_rel, line_color='orange', line_width=1, line_dash='dashed', legend_label='Temperatura media', 
-                name='hum_rel')
+    #fig.line(fecha, hum_rel, line_color='orange', line_width=1, line_dash='dashed', legend_label='Temperatura media', 
+      #          name='hum_rel')
 
     fig.legend.location = 'top_left'
     fig.title.text_font_size = '10pt'
