@@ -3,22 +3,26 @@ from bokeh.models.tools import HoverTool
 from bokeh.plotting import figure, output_file
 import pandas as pd
 from bokeh.io import export_png, save
-from selenium.webdriver.chrome.options import Options
-from selenium import webdriver
 
-chrome_options = Options()
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtCore import QTimer, QSize
 
-chrome_options.binary_location = 'D:\\graph_generator_monthly\\settings_driver\\chromedriver.exe'
+
+
+
+
+
 
 #Driver of GoogleChrome to save png images
-driver = webdriver.Chrome(options=chrome_options)
+
 
 # Directorios de entrada y salida
 directory = "output/html_output/"
 directory2 = "output/img_output/"
 
 # Leer el archivo CSV de entrada
-df = pd.read_csv('database.csv', header=0, delimiter=',')
+df = pd.read_csv(filename, header=0, delimiter=',')
 
 
 # Convertir la columna FECHA a formato datetime y ordenar el dataframe
@@ -103,7 +107,56 @@ for estacion in estaciones:
     fig.legend.label_text_font_size = "8pt"
     fig.legend.spacing = 1
     save(fig)
-    export_png(fig, filename=f"{directory2}{estacion}.png")
+    
+    # Create a Qt application
+    app = QApplication([])
+    view = QWebEngineView()
+    
+    # Load the HTML content
+    view.setHtml(save(fig))
+    
+    # Capture the content when loading is finished
+    def capture():
+        # Set the size of the view
+        view.resize(800, 400)
+        
+        # Grab the screenshot and save as PNG
+        screenshot = view.grab()
+        screenshot.save(f"{directory2}{estacion}.png")
+        
+        # Exit the application after saving the screenshot
+        app.quit()
+    
+    # Connect the capture function to the loadFinished signal
+    view.loadFinished.connect(capture)
+    
+    # Start the application
+    app.exec()
+
+
 
 
  
+from PyQt6.QtWidgets import QApplication, QPushButton, QVBoxLayout, QWidget, QFileDialog
+
+def select_file_and_generate_graphs():
+    options = QFileDialog.Options()
+    filename, _ = QFileDialog.getOpenFileName(None, "Select CSV File", "", "CSV Files (*.csv);;All Files (*)", options=options)
+    if filename:
+        generate_graphs(filename)
+
+def generate_graphs(filename):
+    # The previous logic for reading the csv and generating graphs goes here, but we'll use the provided filename instead
+    pass
+
+app = QApplication([])
+window = QWidget()
+layout = QVBoxLayout()
+
+btn = QPushButton("Select CSV File")
+btn.clicked.connect(select_file_and_generate_graphs)
+layout.addWidget(btn)
+
+window.setLayout(layout)
+window.show()
+app.exec()

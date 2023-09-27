@@ -7,7 +7,7 @@ from bokeh.io import export_png, save
 from selenium import webdriver
 
 #Driver of GoogleChrome to save png images
-driver = webdriver.Chrome(executable_path='settings_driver/chromedriver')
+driver = webdriver.Chrome('D:\\graph_generator_monthly\\settings_driver\\chromedriver.exe')
 
 # Directorios de entrada y salida
 directory = "output2/html_output/"
