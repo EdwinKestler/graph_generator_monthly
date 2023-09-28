@@ -211,6 +211,8 @@ class WeatherGraphsApp(QWidget):
         ax1.set_ylabel('Precipitación (mm)', color='tab:blue')
         ax1.plot(fecha, lluvia, color='tab:blue', label='Precipitación')
         ax1.tick_params(axis='y', labelcolor='tab:blue')
+        ax1.set_ylim(-5, 90)  # Set y-axis limit for Precipitation
+
         
         ax2 = ax1.twinx()  # Create a second y-axis sharing the same x-axis
         ax2.set_ylabel('Temperatura (°C)', color='tab:red')
@@ -223,6 +225,7 @@ class WeatherGraphsApp(QWidget):
         lines1, labels1 = ax1.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
         ax2.legend(lines1 + lines2, labels1 + labels2, loc=0)
+        ax2.set_ylim(-5, 40)  # Set y-axis limit for Temperature
         
         plt.title(f"Data for {estacion}")
         fig.tight_layout()  # Ensure the layout fits well
