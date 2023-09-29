@@ -184,10 +184,10 @@ class WeatherGraphsApp(QWidget):
         
         # Main layout    
         self.setLayout(layout)
-        self.setWindowTitle("Weather Graphs Generator")
+        self.setWindowTitle("Generador de Graficas climaticas")
         
         # Download Button
-        self.download_button = QPushButton("Download Database")
+        self.download_button = QPushButton("1. Bajar base de datos a: datos-CSV\\download-database.csv")
         self.download_button.clicked.connect(self.download_database)
         layout.addWidget(self.download_button)
 
@@ -196,7 +196,7 @@ class WeatherGraphsApp(QWidget):
         layout.addWidget(self.directory_label)
         self.directory_edit = QLineEdit()
         layout.addWidget(self.directory_edit)
-        self.directory_browse_button = QPushButton("1.Seleccionar Diretorio")
+        self.directory_browse_button = QPushButton("2. Seleccionar Diretorio")
         self.directory_browse_button.clicked.connect(self.browse_directory)
         layout.addWidget(self.directory_browse_button)
 
@@ -205,17 +205,17 @@ class WeatherGraphsApp(QWidget):
         layout.addWidget(self.csv_label)
         self.csv_edit = QLineEdit()
         layout.addWidget(self.csv_edit)
-        self.csv_browse_button = QPushButton("2.selecionar Archivo .CSV")
+        self.csv_browse_button = QPushButton("3. Selecionar Archivo .CSV")
         self.csv_browse_button.clicked.connect(self.browse_csv)
         layout.addWidget(self.csv_browse_button)
 
         # Generate Graphs Button
-        self.generate_button = QPushButton("3.Generar Graficos")
+        self.generate_button = QPushButton("4. Generar Graficos")
         self.generate_button.clicked.connect(self.generate_graphs)
         layout.addWidget(self.generate_button)
         
         #Explore button after generating graphs
-        self.explore_button = QPushButton("Explorar archivos generados")
+        self.explore_button = QPushButton("5. Explorar archivos generados")
         self.explore_button.setEnabled(False)  # Initially disable the button
         self.explore_button.clicked.connect(self.open_output_directory)
         layout.addWidget(self.explore_button)
@@ -241,10 +241,13 @@ class WeatherGraphsApp(QWidget):
     # Function to download the database
     def download_database(self):
         file_id = '19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y'
-        destination = 'database.csv'
+        destination = 'datos-csv\\download-database.csv'
         download_file_from_google_drive(file_id, destination)
-        # Optionally, you can add a notification to the user when the download completes
-        print("Database downloaded successfully!")
+        # Update the CSV file path input after download
+        self.csv_edit.setText(destination)
+        # Notify the user that the database has been downloaded
+        QMessageBox.information(self, 'Descarga completada', 'Base de datos descargada Exitosamente!')
+
         
     # Function to show "About" dialog
     def show_about(self):
