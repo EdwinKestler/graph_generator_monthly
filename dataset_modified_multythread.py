@@ -192,11 +192,11 @@ class WeatherGraphsApp(QWidget):
         layout.addWidget(self.download_button)
 
         # Directory Input
-        self.directory_label = QLabel("Fichero de salida:")
+        self.directory_label = QLabel("Directorio de salida:")
         layout.addWidget(self.directory_label)
         self.directory_edit = QLineEdit()
         layout.addWidget(self.directory_edit)
-        self.directory_browse_button = QPushButton("2. Seleccionar Diretorio")
+        self.directory_browse_button = QPushButton("2. Seleccionar Directorio")
         self.directory_browse_button.clicked.connect(self.browse_directory)
         layout.addWidget(self.directory_browse_button)
 
@@ -266,14 +266,14 @@ class WeatherGraphsApp(QWidget):
         
     # Function to open the output directory            
     def browse_directory(self):
-        directory = QFileDialog.getExistingDirectory(self, "Select Output Directory")
+        directory = QFileDialog.getExistingDirectory(self, "Seleccionar Directorio de Salida")
         if directory:
             self.directory_edit.setText(directory)
 
     # Function to browse the CSV file
     def browse_csv(self):
         file_filter = "CSV Files (*.csv);;All Files (*)"
-        file_name, _ = QFileDialog.getOpenFileName(self, "Select Database CSV", "", file_filter)
+        file_name, _ = QFileDialog.getOpenFileName(self, "seleccionar base de datos csv", "", file_filter)
         if file_name:
             self.csv_edit.setText(file_name)
             
