@@ -240,14 +240,23 @@ class WeatherGraphsApp(QWidget):
         
     # Function to download the database
     def download_database(self):
-        file_id = '19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y'
-        destination = 'datos-csv\\download-database.csv'
-        download_file_from_google_drive(file_id, destination)
-        # Update the CSV file path input after download
-        self.csv_edit.setText(destination)
-        # Notify the user that the database has been downloaded
-        QMessageBox.information(self, 'Descarga completada', 'Base de datos descargada Exitosamente!')
-
+        try:
+            file_id = '19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y'
+            destination = 'datos-csv\\download-database.csv'
+            
+            # Check if the directory exists and create if not
+            os.makedirs(os.path.dirname(destination), exist_ok=True)
+            
+            download_file_from_google_drive(file_id, destination)
+            
+            # Update the CSV file path input after download
+            self.csv_edit.setText(destination)
+            
+            # Notify the user that the database has been downloaded
+            QMessageBox.information(self, 'Descarga completada', 'Base de datos descargada Exitosamente!')
+            
+        except Exception as e:
+            QMessageBox.critical(self, 'Error', f'Ocurrió un error durante la descarga: {str(e)}')
         
     # Function to show "About" dialog
     def show_about(self):
