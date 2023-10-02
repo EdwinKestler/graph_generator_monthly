@@ -1,7 +1,7 @@
 import sys
 import os
 import pandas as pd
-from PyQt6.QtWidgets import (QApplication, QLabel, QVBoxLayout, QWidget, QPushButton, QFileDialog, QLineEdit, QProgressBar)
+from PyQt6.QtWidgets import (QApplication, QLabel, QVBoxLayout, QWidget, QPushButton, QFileDialog, QLineEdit, QProgressBar,QDialog)
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtCore import Qt
 from bokeh.plotting import output_file, save
@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QMessageBox
 from PyQt6.QtWidgets import QHBoxLayout
+from PyQt6.QtGui import QMovie
 import subprocess
 import requests
 
@@ -31,6 +32,22 @@ def save_response_content(response, destination):
             if chunk: # filter out keep-alive new chunks
                 f.write(chunk)
                 
+#varify_and_create_folders
+def verify_and_create_folders():
+    # Define the main folder and subfolders
+    main_folder = 'main_folder'
+    subfolders = ['datos-csv', 'output-folder', 'images']
+
+    # Create the main folder if it doesn't exist
+    if not os.path.exists(main_folder):
+        os.makedirs(main_folder)
+
+    # Create the subfolders if they don't exist
+    for subfolder in subfolders:
+        subfolder_path = os.path.join(main_folder, subfolder)
+        if not os.path.exists(subfolder_path):
+            os.makedirs(subfolder_path)
+                            
 #download_file_from_google_drive
 def download_file_from_google_drive(file_id, destination):
     URL = "https://drive.google.com/uc?export=download"
@@ -48,6 +65,23 @@ def download_file_from_google_drive(file_id, destination):
 def resource_path(relative_path):
     base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_path, relative_path)
+
+class LoadingDialog(QDialog):
+   def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setModal(True)  # Make the dialog modal
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)  # Remove window frame
+
+        # Set up the loading animation
+        self.loading_movie = QMovie("images\\spinning-loading.gif")
+        self.loading_label = QLabel(self)
+        self.loading_label.setMovie(self.loading_movie)
+        self.loading_movie.start()  # Start the animation
+
+        # Set up the dialog layout
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(self.loading_label)
+        self.setLayout(self.layout)
 
 class Worker(QThread):
     progress_signal = pyqtSignal(str)
@@ -232,15 +266,23 @@ class WeatherGraphsApp(QWidget):
         self.about_button = QPushButton("Acerca de")
         self.about_button.clicked.connect(self.show_about)
         layout.addWidget(self.about_button)
-        
-        
-        
+             
         # Set the main layout to the widget
         self.setLayout(main_layout)
+        
+    # Loading spinner
+    def show_loading(self):
+        self.loading_dialog = LoadingDialog(self)
+        self.loading_dialog.show()
+
+    def hide_loading(self):
+        self.loading_dialog.accept()  # Close the loading dialog
+
         
     # Function to download the database
     def download_database(self):
         try:
+            self.show_loading()  # Show loading spinner
             file_id = '19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y'
             destination = 'datos-csv\\download-database.csv'
             
@@ -257,6 +299,8 @@ class WeatherGraphsApp(QWidget):
             
         except Exception as e:
             QMessageBox.critical(self, 'Error', f'Ocurrió un error durante la descarga: {str(e)}')
+        finally:
+            self.hide_loading()  # Hide loading spinner whether download succeeds or fails
         
     # Function to show "About" dialog
     def show_about(self):
@@ -320,6 +364,8 @@ class WeatherGraphsApp(QWidget):
             grouped_data = df.groupby('Nombre')
 
             # Set progress bar
+            self.show_loading()  # Show loading spinner before starting the worker thread
+
             self.progress.setMaximum(len(grouped_data))
             self.progress.setValue(0)
 
@@ -328,10 +374,12 @@ class WeatherGraphsApp(QWidget):
             self.worker.progress_signal.connect(self.update_progress)
             self.worker.finished.connect(lambda: self.status_label.setText("Graficos generados exitosamente!"))
             self.worker.finished.connect(self.graphs_generated)
+            self.worker.finished.connect(self.hide_loading)  # Hide loading spinner after worker thread finishes
                
             self.worker.start()
 
         except Exception as e:
+            self.hide_loading()  # Hide loading spinner if an exception occurs
             self.status_label.setText(f"Error: {str(e)}")
             
     def graphs_generated(self):
@@ -388,6 +436,7 @@ class WeatherGraphsApp(QWidget):
 
     
 def main():
+    verify_and_create_folders()
     app = QApplication(sys.argv)
     window = WeatherGraphsApp()
     window.show()
