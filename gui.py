@@ -15,8 +15,6 @@ import matplotlib.pyplot as plt
 from download_database import download_file_from_google_drive
 from data_processing import read_and_prepare_data, prepare_data_for_graphs, process_grouped_data
 
-
-
 class LoadingDialog(QDialog):
    def __init__(self, parent=None):
         super().__init__(parent)
@@ -35,7 +33,7 @@ class LoadingDialog(QDialog):
         self.setLayout(self.layout)
 
 class Worker(QThread):
-    progress_signal = pyqtSignal(str)
+    progress_signal = pyqtSignal(int)
     plot_data_signal = pyqtSignal(object)
 
 
@@ -51,15 +49,19 @@ class Worker(QThread):
         df = read_and_prepare_data(self.csv_file_path)
         grouped_data = prepare_data_for_graphs(df)
         
-        for name, group in self.grouped_data:
+        self.progress_signal.emit(0)  # Initialize progress bar
+        
+        for i, (name, group) in enumerate(grouped_data):
             plot_data = process_grouped_data(name, group, self.directory_img, self.directory_html)
             self.plot_data_signal.emit(plot_data)
-            self.progress_signal.emit(name)
+            self.progress_signal.emit(i + 1)  # Update progress bar
 
+        
 class WeatherGraphsApp(QWidget):
     def __init__(self):
         super().__init__()
         self.init_ui()
+        self.loading_dialog = None  # Initialize the attribute
 
     def init_ui(self):
         self.setWindowTitle("Generador de Graficas Mensual")
@@ -152,7 +154,8 @@ class WeatherGraphsApp(QWidget):
         self.loading_dialog.show()
 
     def hide_loading(self):
-        self.loading_dialog.accept()  # Close the loading dialog
+        if self.loading_dialog:
+            self.loading_dialog.accept()
         
     # Function to download the database
     def download_database(self):
@@ -233,24 +236,23 @@ class WeatherGraphsApp(QWidget):
         os.makedirs(directory_html, exist_ok=True)
 
         try:
-            df = pd.read_csv(csv_file_path, header=0, delimiter=',')
-            df['fecha'] = pd.to_datetime(df['fecha'], format="%d/%m/%Y")
-
-            grouped_data = df.groupby('Nombre')
-
-            # Set progress bar
+            df = read_and_prepare_data(csv_file_path)
+            grouped_data = prepare_data_for_graphs(df)
+            
             self.show_loading()  # Show loading spinner before starting the worker thread
-
+            
+            # Set progress bar maximum
             self.progress.setMaximum(len(grouped_data))
-            self.progress.setValue(0)
 
+            # Correctly pass the csv_file_path to the Worker
             self.worker = Worker(grouped_data, directory_img, directory_html, csv_file_path)
             self.worker.plot_data_signal.connect(self.plot_with_matplotlib)
             self.worker.progress_signal.connect(self.update_progress)
             self.worker.finished.connect(lambda: self.status_label.setText("Graficos generados exitosamente!"))
             self.worker.finished.connect(self.graphs_generated)
-            self.worker.finished.connect(self.hide_loading)  # Hide loading spinner after worker thread finishes
-               
+            self.worker.finished.connect(self.hide_loading)
+            
+            # Set progress bar
             self.worker.start()
 
         except Exception as e:
@@ -305,9 +307,8 @@ class WeatherGraphsApp(QWidget):
         #plt.show()
         plt.close(fig)
         
-    def update_progress(self, estacion):
-            self.progress.setValue(self.progress.value() + 1)
-            self.status_label.setText(f"Procesando estacion {estacion}...")
+    def update_progress(self, value):
+        self.progress.setValue(value)
 
 def main():
     app = QApplication(sys.argv)
