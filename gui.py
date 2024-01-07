@@ -1,33 +1,23 @@
 import sys
-from PyQt6.QtWidgets import (QApplication, QLabel, QVBoxLayout, QWidget, QPushButton, QFileDialog, QLineEdit, QProgressBar,QDialog)
-from PyQt6.QtCore import QThread, pyqtSignal
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPixmap
-from PyQt6.QtWidgets import QMessageBox
-from PyQt6.QtWidgets import QHBoxLayout
-from PyQt6.QtGui import QMovie
 import subprocess
 import os
-import pandas as pd
-from bokeh.plotting import figure, output_file, save
-from bokeh.models import Range1d, LinearAxis, HoverTool
-import matplotlib.pyplot as plt
+from PyQt6.QtWidgets import (QApplication, QLabel, QVBoxLayout, QWidget, QPushButton, QFileDialog, QLineEdit, QProgressBar, QDialog, QMessageBox, QHBoxLayout)
+from PyQt6.QtCore import QThread, pyqtSignal, Qt
+from PyQt6.QtGui import QPixmap, QMovie
 from download_database import download_file_from_google_drive
-from data_processing import read_and_prepare_data, prepare_data_for_graphs, process_grouped_data
+from graph_generation import GraphGenerator, plot_with_matplotlib
 
 class LoadingDialog(QDialog):
-   def __init__(self, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.setModal(True)  # Make the dialog modal
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)  # Remove window frame
+        self.setModal(True)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
 
-        # Set up the loading animation
         self.loading_movie = QMovie("images\\spinning-loading.gif")
         self.loading_label = QLabel(self)
         self.loading_label.setMovie(self.loading_movie)
-        self.loading_movie.start()  # Start the animation
+        self.loading_movie.start()
 
-        # Set up the dialog layout
         self.layout = QVBoxLayout()
         self.layout.addWidget(self.loading_label)
         self.setLayout(self.layout)
@@ -35,120 +25,79 @@ class LoadingDialog(QDialog):
 class Worker(QThread):
     progress_signal = pyqtSignal(int)
     plot_data_signal = pyqtSignal(object)
+    finished_signal = pyqtSignal(str)
 
-
-    def __init__(self, grouped_data, directory_img, directory_html, csv_file_path):
+    def __init__(self):
         super().__init__()
-        self.grouped_data = grouped_data
-        self.directory_img = directory_img
-        self.directory_html = directory_html
-        self.csv_file_path = csv_file_path  # Added this line
 
-
-    def run(self):
-        df = read_and_prepare_data(self.csv_file_path)
-        grouped_data = prepare_data_for_graphs(df)
-        
-        self.progress_signal.emit(0)  # Initialize progress bar
-        
-        for i, (name, group) in enumerate(grouped_data):
-            plot_data = process_grouped_data(name, group, self.directory_img, self.directory_html)
-            self.plot_data_signal.emit(plot_data)
-            self.progress_signal.emit(i + 1)  # Update progress bar
-
-        
 class WeatherGraphsApp(QWidget):
     def __init__(self):
         super().__init__()
         self.init_ui()
-        self.loading_dialog = None  # Initialize the attribute
 
     def init_ui(self):
         self.setWindowTitle("Generador de Graficas Mensual")
-        main_layout= layout = QVBoxLayout()
-        
-        # Horizontal layout for logos
+        main_layout = QVBoxLayout()
+
         logo_layout = QHBoxLayout()
-        # Logos at the top
-        self.logo1 = QLabel(self)
-        pixmap1 = QPixmap("images\\logo_insivumeh.png")  # replace with your logo's path
-        self.logo1.setPixmap(pixmap1)
-        resized_pixmap1 = pixmap1.scaled(128, 128, Qt.AspectRatioMode.KeepAspectRatio)
-        self.logo1.setPixmap(resized_pixmap1)
-        logo_layout.addWidget(self.logo1)
-        
-        self.logo2 = QLabel(self)
-        pixmap2 = QPixmap("images\\waterco-logo.png")  # replace with your logo's path
-        self.logo2.setPixmap(pixmap2)
-        resized_pixmap2 = pixmap2.scaled(128, 128, Qt.AspectRatioMode.KeepAspectRatio)
-        self.logo2.setPixmap(resized_pixmap2)
-        logo_layout.addWidget(self.logo2)
-        
-        self.logo3 = QLabel(self)
-        pixmap3 = QPixmap("images\\IUCN_logo.png")  # replace with your logo's path
-        self.logo3.setPixmap(pixmap3)
-        resized_pixmap3 = pixmap3.scaled(128, 128, Qt.AspectRatioMode.KeepAspectRatio)
-        self.logo3.setPixmap(resized_pixmap3)
-        logo_layout.addWidget(self.logo3)
-        
-        # Add logos_layout to main layout
+        self.setup_logo(logo_layout, "images\\logo_insivumeh.png")
+        self.setup_logo(logo_layout, "images\\waterco-logo.png")
+        self.setup_logo(logo_layout, "images\\IUCN_logo.png")
         main_layout.addLayout(logo_layout)
-        
-        # Main layout    
-        self.setLayout(layout)
-        self.setWindowTitle("Generador de Graficas climaticas")
-        
-        # Download Button
+
         self.download_button = QPushButton("1. Bajar base de datos a: datos-CSV\\download-database.csv")
         self.download_button.clicked.connect(self.download_database)
-        layout.addWidget(self.download_button)
+        main_layout.addWidget(self.download_button)
 
-        # Directory Input
         self.directory_label = QLabel("Directorio de salida:")
-        layout.addWidget(self.directory_label)
+        main_layout.addWidget(self.directory_label)
+
         self.directory_edit = QLineEdit()
-        layout.addWidget(self.directory_edit)
+        main_layout.addWidget(self.directory_edit)
+
         self.directory_browse_button = QPushButton("2. Seleccionar Directorio")
         self.directory_browse_button.clicked.connect(self.browse_directory)
-        layout.addWidget(self.directory_browse_button)
+        main_layout.addWidget(self.directory_browse_button)
 
-        # CSV File Input
         self.csv_label = QLabel("Base de datos .CSV:")
-        layout.addWidget(self.csv_label)
+        main_layout.addWidget(self.csv_label)
+
         self.csv_edit = QLineEdit()
-        layout.addWidget(self.csv_edit)
+        main_layout.addWidget(self.csv_edit)
+
         self.csv_browse_button = QPushButton("3. Selecionar Archivo .CSV")
         self.csv_browse_button.clicked.connect(self.browse_csv)
-        layout.addWidget(self.csv_browse_button)
+        main_layout.addWidget(self.csv_browse_button)
 
-        # Generate Graphs Button
         self.generate_button = QPushButton("4. Generar Graficos")
-        self.generate_button.clicked.connect(self.generate_graphs)
-        layout.addWidget(self.generate_button)
-        
-        #Explore button after generating graphs
+        self.generate_button.clicked.connect(self.generate_graphs_wrapper)
+        main_layout.addWidget(self.generate_button)
+
         self.explore_button = QPushButton("5. Explorar archivos generados")
-        self.explore_button.setEnabled(False)  # Initially disable the button
+        self.explore_button.setEnabled(False)
         self.explore_button.clicked.connect(self.open_output_directory)
-        layout.addWidget(self.explore_button)
+        main_layout.addWidget(self.explore_button)
 
-        # Progress Bar
         self.progress = QProgressBar(self)
-        layout.addWidget(self.progress)
+        main_layout.addWidget(self.progress)
 
-        # Status Updates
         self.status_label = QLabel("")
-        layout.addWidget(self.status_label)
-        
-        # About Button
+        main_layout.addWidget(self.status_label)
+
         self.about_button = QPushButton("Acerca de")
         self.about_button.clicked.connect(self.show_about)
-        layout.addWidget(self.about_button)
-             
-        # Set the main layout to the widget
+        main_layout.addWidget(self.about_button)
+
         self.setLayout(main_layout)
-        
-    # Loading spinner
+        self.loading_dialog = None
+
+    def setup_logo(self, layout, image_path):
+        logo = QLabel(self)
+        pixmap = QPixmap(image_path)
+        resized_pixmap = pixmap.scaled(128, 128, Qt.AspectRatioMode.KeepAspectRatio)
+        logo.setPixmap(resized_pixmap)
+        layout.addWidget(logo)
+
     def show_loading(self):
         self.loading_dialog = LoadingDialog(self)
         self.loading_dialog.show()
@@ -221,7 +170,7 @@ class WeatherGraphsApp(QWidget):
                 subprocess.check_call(["xdg-open", output_directory])    
             
     #Fucntion to generate graphs
-    def generate_graphs(self):
+    def generate_graphs_wrapper(self):
         output_directory = self.directory_edit.text()
         csv_file_path = self.csv_edit.text()
 
@@ -230,85 +179,21 @@ class WeatherGraphsApp(QWidget):
             return
 
         self.status_label.setText("Procesando datos... porfavor espere.")
-        directory_img = os.path.join(output_directory, "img_output")
-        directory_html = os.path.join(output_directory, "html_output")
-        os.makedirs(directory_img, exist_ok=True)
-        os.makedirs(directory_html, exist_ok=True)
+        self.show_loading()
 
-        try:
-            df = read_and_prepare_data(csv_file_path)
-            grouped_data = prepare_data_for_graphs(df)
-            
-            self.show_loading()  # Show loading spinner before starting the worker thread
-            
-            # Set progress bar maximum
-            self.progress.setMaximum(len(grouped_data))
+        self.graph_generator = GraphGenerator()
+        self.graph_generator.progress_signal.connect(self.update_progress)
+        self.graph_generator.plot_data_signal.connect(plot_with_matplotlib)
+        self.graph_generator.completion_signal.connect(lambda message: self.status_label.setText(message))
 
-            # Correctly pass the csv_file_path to the Worker
-            self.worker = Worker(grouped_data, directory_img, directory_html, csv_file_path)
-            self.worker.plot_data_signal.connect(self.plot_with_matplotlib)
-            self.worker.progress_signal.connect(self.update_progress)
-            self.worker.finished.connect(lambda: self.status_label.setText("Graficos generados exitosamente!"))
-            self.worker.finished.connect(self.graphs_generated)
-            self.worker.finished.connect(self.hide_loading)
-            
-            # Set progress bar
-            self.worker.start()
+        self.graph_generator.generate_graphs(output_directory, csv_file_path)
 
-        except Exception as e:
-            self.hide_loading()  # Hide loading spinner if an exception occurs
-            self.status_label.setText(f"Error: {str(e)}")
-            
-    def graphs_generated(self):
-                self.status_label.setText("Graficos generados exitosamente!")
-                self.explore_button.setEnabled(True)
-
-    def plot_with_matplotlib(self, data):
-        # 1. Extract the data
-        fecha = data['fecha']
-        lluvia = data['lluvia']
-        tmin = data['tmin']
-        tseca = data['tseca']
-        tmax = data['tmax']
-        estacion = data['estacion']
-        directory_img = data['directory_img']
-
-        # 2. Start plotting with matplotlib
-        fig, ax1 = plt.subplots(figsize=(10,5))
-        
-        ax1.set_xlabel('Fecha')
-        ax1.set_ylabel('Precipitación (mm)', color='tab:blue')
-        ax1.plot(fecha, lluvia, color='tab:blue', label='Precipitación')
-        ax1.tick_params(axis='y', labelcolor='tab:blue')
-        ax1.set_ylim(-5, 90)  # Set y-axis limit for Precipitation
-
-        
-        ax2 = ax1.twinx()  # Create a second y-axis sharing the same x-axis
-        ax2.set_ylabel('Temperatura (°C)', color='tab:red')
-        ax2.plot(fecha, tseca, color='tab:green', label='Temperatura Seca')
-        ax2.plot(fecha, tmin, color='deepskyblue', linestyle='--', label='Temp Min')
-        ax2.plot(fecha, tmax, color='firebrick', linestyle='--', label='Temp Max')
-        ax2.tick_params(axis='y', labelcolor='tab:red')
-        
-        # Handle legends and title
-        lines1, labels1 = ax1.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax2.legend(lines1 + lines2, labels1 + labels2, loc=0)
-        ax2.set_ylim(-5, 40)  # Set y-axis limit for Temperature
-        
-        plt.title(f"Data for {estacion}")
-        fig.tight_layout()  # Ensure the layout fits well
-        
-        # Save the figure to a PNG file
-        save_path = os.path.join(directory_img, f"{estacion}.png")
-        plt.savefig(save_path)
-        
-        # Optionally show the plot (might not be needed in a GUI app, but useful for testing)
-        #plt.show()
-        plt.close(fig)
-        
     def update_progress(self, value):
         self.progress.setValue(value)
+
+    def graphs_generated(self):
+        self.status_label.setText("Graficos generados exitosamente!")
+        self.explore_button.setEnabled(True)
 
 def main():
     app = QApplication(sys.argv)

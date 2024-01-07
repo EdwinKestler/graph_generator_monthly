@@ -3,7 +3,14 @@ import os
 from gui import WeatherGraphsApp
 from PyQt6.QtWidgets import QApplication
                 
-#varify_and_create_folders
+# verify_and_create_folders
+""" 
+verify_and_create_folders function checks if the main folder and subfolders exist. If they don't, it creates them.
+main_folder: str
+    Name of the main folder
+subfolders: list
+    List of subfolders to be created
+"""
 def verify_and_create_folders():
     # Define the main folder and subfolders
     main_folder = 'main_folder'
