@@ -66,7 +66,7 @@ class WeatherGraphsApp(QWidget):
         self.setup_logo(logo_layout, "images\\IUCN_logo.png")
         main_layout.addLayout(logo_layout)
 
-        self.download_button = QPushButton("1. Bajar base de datos a: datos-CSV\\download-database.csv")
+        self.download_button = QPushButton("1. Bajar base de datos Mensual .CSV de INSIVUMEH")
         self.download_button.clicked.connect(self.download_database)
         main_layout.addWidget(self.download_button)
 
@@ -76,7 +76,7 @@ class WeatherGraphsApp(QWidget):
         self.directory_edit = QLineEdit()
         main_layout.addWidget(self.directory_edit)
 
-        self.directory_browse_button = QPushButton("2. Seleccionar Directorio")
+        self.directory_browse_button = QPushButton("2. Seleccionar Directorio de Salida")
         self.directory_browse_button.clicked.connect(self.browse_directory)
         main_layout.addWidget(self.directory_browse_button)
 
@@ -86,16 +86,16 @@ class WeatherGraphsApp(QWidget):
         self.csv_edit = QLineEdit()
         main_layout.addWidget(self.csv_edit)
 
-        self.csv_browse_button = QPushButton("3. Selecionar Archivo .CSV")
+        self.csv_browse_button = QPushButton("3. Selecionar base de datos .csv a graficar")
         self.csv_browse_button.clicked.connect(self.browse_csv)
         main_layout.addWidget(self.csv_browse_button)
 
-        self.generate_button = QPushButton("4. Generar Graficos")
+        self.generate_button = QPushButton("4. Generar Graficos mensuales")
         self.generate_button.clicked.connect(self.generate_graphs_wrapper)
         main_layout.addWidget(self.generate_button)
         
         
-        self.explore_button = QPushButton("5. Explorar archivos generados")
+        self.explore_button = QPushButton("5. Explorar graficas generadas")
         self.explore_button.setEnabled(False)
         self.explore_button.clicked.connect(self.open_output_directory)
         main_layout.addWidget(self.explore_button)
@@ -107,19 +107,19 @@ class WeatherGraphsApp(QWidget):
         main_layout.addWidget(self.status_label)
         
         
+        # Add button to select the service account file
+        self.select_service_account_button = QPushButton("6. Seleccionar Archivo de autenticación de cuenta")
+        self.select_service_account_button.clicked.connect(self.browse_service_account_file)
+        main_layout.addWidget(self.select_service_account_button)
+        
         # Add UI components for file upload
-        self.upload_file_button = QPushButton("6. Seleccionar archivo para subir")
+        self.upload_file_button = QPushButton("7. Enviar base de datos .csv a INSIVUMEH")
         self.upload_file_button.clicked.connect(self.browse_upload_file)
         main_layout.addWidget(self.upload_file_button)
 
         self.upload_status_label = QLabel("")
         main_layout.addWidget(self.upload_status_label)
-        
-        # Add button to select the service account file
-        self.select_service_account_button = QPushButton("7. Seleccionar archivo de cuenta de servicio")
-        self.select_service_account_button.clicked.connect(self.browse_service_account_file)
-        main_layout.addWidget(self.select_service_account_button)
-        
+                
         
         self.about_button = QPushButton("Acerca de")
         self.about_button.clicked.connect(self.show_about)

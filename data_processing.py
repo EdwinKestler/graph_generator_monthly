@@ -4,7 +4,7 @@ from bokeh.models import Range1d, LinearAxis, HoverTool
 import os
 
 # Constants
-DATE_FORMAT = "%d/%m/%Y"
+DATE_FORMAT = "%Y/%m/%d"
 
 def read_and_prepare_data(csv_file_path):
     """
