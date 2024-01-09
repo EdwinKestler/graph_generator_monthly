@@ -26,7 +26,7 @@ class GraphGenerator(QObject):
                 progress = int((i + 1) / total * 100)
                 self.progress_signal.emit(progress)  # Update progress
 
-            self.completion_signal.emit("Graficos generados exitosamente!")
+            self.completion_signal.emit("Gráficos generados exitosamente!")
 
         except Exception as e:
             self.completion_signal.emit(f"Error: {str(e)}")
@@ -35,7 +35,6 @@ def plot_with_matplotlib(data):
     """
     Plot the data using matplotlib and save the figures.
     """
-    # Extract the data
     fecha = data['fecha']
     lluvia = data['lluvia']
     tmin = data['tmin']
@@ -44,35 +43,31 @@ def plot_with_matplotlib(data):
     estacion = data['estacion']
     directory_img = data['directory_img']
 
-    # Start plotting with matplotlib
     fig, ax1 = plt.subplots(figsize=(10, 5))
 
     ax1.set_xlabel('Fecha')
     ax1.set_ylabel('Precipitación (mm)', color='tab:blue')
     ax1.plot(fecha, lluvia, color='tab:blue', label='Precipitación')
     ax1.tick_params(axis='y', labelcolor='tab:blue')
-    ax1.set_ylim(-5, 90)  # Set y-axis limit for Precipitation
+    ax1.set_ylim(-5, 90)
 
-    ax2 = ax1.twinx()  # Create a second y-axis sharing the same x-axis
+    ax2 = ax1.twinx()
     ax2.set_ylabel('Temperatura (°C)', color='tab:red')
     ax2.plot(fecha, tseca, color='tab:green', label='Temperatura Seca')
     ax2.plot(fecha, tmin, color='deepskyblue', linestyle='--', label='Temp Min')
     ax2.plot(fecha, tmax, color='firebrick', linestyle='--', label='Temp Max')
     ax2.tick_params(axis='y', labelcolor='tab:red')
 
-    # Handle legends and title
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
     ax2.legend(lines1 + lines2, labels1 + labels2, loc=0)
-    ax2.set_ylim(-5, 40)  # Set y-axis limit for Temperature
+    ax2.set_ylim(-5, 40)
 
     plt.title(f"Data for {estacion}")
-    fig.tight_layout()  # Ensure the layout fits well
+    fig.tight_layout()
 
-    # Save the figure to a PNG file
     save_path = os.path.join(directory_img, f"{estacion}.png")
     plt.savefig(save_path)
-
-    # Optionally show the plot (might not be needed in a GUI app, but useful for testing)
-    # plt.show()
     plt.close(fig)
+    
+    

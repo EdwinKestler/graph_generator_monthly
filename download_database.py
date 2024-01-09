@@ -1,5 +1,6 @@
 import requests
 import logging
+import os
 
 def get_confirm_token(response):
     """Retrieve confirmation token from the response cookies."""
@@ -7,6 +8,7 @@ def get_confirm_token(response):
         if key.startswith('download_warning'):
             return value
     return None
+
 
 def save_response_content(response, destination):
     """Save the content of the response to a file."""
@@ -20,6 +22,7 @@ def save_response_content(response, destination):
     except IOError as e:
         logging.error(f"Error writing to {destination}: {e}")
         raise
+    
 
 def download_file_from_google_drive(file_id, destination):
     """Download a file from Google Drive."""
@@ -54,4 +57,3 @@ def download_file_from_google_drive(file_id, destination):
         logging.error(f"An unexpected error occurred: {e}")
         return False
 
-# Include additional two line breaks after the function definition in module-level script

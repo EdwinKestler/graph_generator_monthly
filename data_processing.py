@@ -2,23 +2,51 @@ import pandas as pd
 from bokeh.plotting import figure, output_file, save
 from bokeh.models import Range1d, LinearAxis, HoverTool
 import os
-from datetime import datetime
 
+# Constants
+DATE_FORMAT = "%d/%m/%Y"
 
 def read_and_prepare_data(csv_file_path):
-    """Read and prepare data from CSV file."""
+    """
+    Read and prepare data from a CSV file.
+
+    Args:
+        csv_file_path (str): Path to the CSV file.
+
+    Returns:
+        pd.DataFrame: Prepared DataFrame.
+    """
     df = pd.read_csv(csv_file_path, header=0, delimiter=',')
-    df['fecha'] = pd.to_datetime(df['fecha'], format="%d/%m/%Y")
+    df['fecha'] = pd.to_datetime(df['fecha'], format=DATE_FORMAT)
     return df
 
 def prepare_data_for_graphs(df):
-    """Group data for graph preparation."""
+    """
+    Group data for graph preparation.
+
+    Args:
+        df (pd.DataFrame): Input DataFrame.
+
+    Returns:
+        pd.DataFrameGroupBy: Grouped data.
+    """
     return df.groupby('Nombre')
 
 def process_grouped_data(name, group, directory_img, directory_html):
-    """Process and plot data for each group."""
+    """
+    Process and plot data for each group.
+
+    Args:
+        name (str): Station name.
+        group (pd.DataFrame): Grouped data.
+        directory_img (str): Directory for images.
+        directory_html (str): Directory for HTML output.
+
+    Returns:
+        dict: Data for further processing or matplotlib plotting.
+    """
     df = group.copy()
-    df['fecha'] = pd.to_datetime(df['fecha'], format="%d/%m/%Y")
+    df['fecha'] = pd.to_datetime(df['fecha'], format=DATE_FORMAT)
     latest_date = df['fecha'].max()
     month_year_str = latest_date.strftime("%m-%Y")
     thirty_days_ago = latest_date - pd.Timedelta(days=30)
@@ -33,7 +61,16 @@ def process_grouped_data(name, group, directory_img, directory_html):
     return extract_plotting_data(last_30_days_data, name, directory_img)
 
 def create_bokeh_plot(data, station_name):
-    """Create Bokeh plot for the given data."""
+    """
+    Create Bokeh plot for the given data.
+
+    Args:
+        data (pd.DataFrame): Data for plotting.
+        station_name (str): Station name.
+
+    Returns:
+        bokeh.plotting.Figure: Bokeh plot.
+    """
     fig = figure(
         x_axis_type='datetime', title=station_name, height=400, width=800,
         toolbar_location='below', y_axis_label="Precipitación (mm)",
@@ -71,7 +108,15 @@ def add_tooltips(fig):
     fig.add_tools(HoverTool(tooltips=tooltips, formatters=formatters, mode='vline'))
 
 def save_plot(fig, station_name, month_year_str, directory_html):
-    """Save the plot as an HTML file."""
+    """
+    Save the plot as an HTML file.
+
+    Args:
+        fig (bokeh.plotting.Figure): Bokeh plot.
+        station_name (str): Station name.
+        month_year_str (str): Month and year as a string.
+        directory_html (str): Directory for HTML output.
+    """
     filename = f'{station_name}_{month_year_str}.html'
     output_file(os.path.join(directory_html, filename))
     fig.legend.background_fill_alpha = 0.5
@@ -80,7 +125,17 @@ def save_plot(fig, station_name, month_year_str, directory_html):
     save(fig)
 
 def extract_plotting_data(data, station_name, directory_img):
-    """Extract and return data for plotting."""
+    """
+    Extract and return data for plotting.
+
+    Args:
+        data (pd.DataFrame): Data for plotting.
+        station_name (str): Station name.
+        directory_img (str): Directory for images.
+
+    Returns:
+        dict: Data for plotting.
+    """
     return {
         'fecha': data['fecha'],
         'lluvia': data['lluvia'],
@@ -90,5 +145,5 @@ def extract_plotting_data(data, station_name, directory_img):
         'estacion': station_name,
         'directory_img': directory_img
     }
-
-# Include additional two line breaks after the last function definition
+    
+    
