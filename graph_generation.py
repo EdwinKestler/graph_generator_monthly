@@ -7,9 +7,8 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from data_processing import read_and_prepare_data, prepare_data_for_graphs, process_grouped_data
 
 class GraphGenerator(QObject):
-    progress_signal = pyqtSignal(int)
-    plot_data_signal = pyqtSignal(object)
-    completion_signal = pyqtSignal(str)
+    progress_signal   = pyqtSignal(int)
+    completion_signal = pyqtSignal(str, str)   # (status_message, run_folder_abs_path)
 
     def generate_graphs(self, output_directory, csv_file_path):
         try:
@@ -29,19 +28,25 @@ class GraphGenerator(QObject):
             total = len(grouped_data)
             for i, (name, group) in enumerate(grouped_data):
                 plot_data = process_grouped_data(name, group, directory_img, directory_html)
-                self.plot_data_signal.emit(plot_data)
+                plot_with_matplotlib(plot_data)
                 progress = int((i + 1) / total * 100)
                 self.progress_signal.emit(progress)
 
-            self.completion_signal.emit(f"Gráficos generados exitosamente! → {run_folder}")
+            run_folder_path = os.path.abspath(os.path.join(output_directory, run_folder))
+            self.completion_signal.emit(
+                f"Gráficos generados exitosamente! → {run_folder}",
+                run_folder_path,
+            )
 
         except Exception as e:
-            self.completion_signal.emit(f"Error: {str(e)}")
+            self.completion_signal.emit(f"Error: {str(e)}", "")
+
 
 def plot_with_matplotlib(data):
     """
     Plot the data using matplotlib and save the figures.
     Three axes: precipitation (left), temperature (right), humidity (far right).
+    Runs on the GraphWorker background thread — never on the GUI thread.
     """
     try:
         fecha = data['fecha']

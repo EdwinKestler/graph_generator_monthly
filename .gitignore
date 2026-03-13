@@ -5,6 +5,10 @@ graficas_*/
 # Downloaded / auto-generated data files
 data/insivumeh_*.csv
 data/_download_temp.csv
+data/download-database.csv
+
+# Log file written by monthly_graph.py
+graph_generator.log
 
 # PyInstaller build artefacts
 build/

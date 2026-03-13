@@ -12,8 +12,11 @@ from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from PyQt6.QtGui import QPixmap, QMovie
 from data_processing import detect_date_format
 from download_database import download_file_from_google_drive
-from graph_generation import GraphGenerator, plot_with_matplotlib
+from graph_generation import GraphGenerator
 from map_viewer import build_station_summary, generate_map
+
+# Google Drive file ID for the INSIVUMEH monthly database (Step 1 download)
+GDRIVE_FILE_ID = '19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y'
 
 
 def resource_path(relative_path):
@@ -44,10 +47,8 @@ def open_map_in_browser(map_path: str) -> None:
 
 
 class DownloadWorker(QThread):
-    finished_signal = pyqtSignal(str, str)   # (final_path, display_message)  on success
+    finished_signal = pyqtSignal(str, str)   # (final_path, display_message) on success
     error_signal    = pyqtSignal(str)         # error message on failure
-
-    FILE_ID = '19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y'
 
     def run(self):
         data_dir  = 'data'
@@ -55,7 +56,7 @@ class DownloadWorker(QThread):
         temp_path = os.path.join(data_dir, '_download_temp.csv')
 
         try:
-            success = download_file_from_google_drive(self.FILE_ID, temp_path)
+            success = download_file_from_google_drive(GDRIVE_FILE_ID, temp_path)
             if not success:
                 self.error_signal.emit(
                     'No se pudo descargar la base de datos. '
@@ -111,8 +112,7 @@ class MapWorker(QThread):
 
 class GraphWorker(QThread):
     progress_signal = pyqtSignal(int)
-    plot_data_signal = pyqtSignal(object)
-    finished_signal = pyqtSignal(str)
+    finished_signal = pyqtSignal(str, str)   # (status_message, run_folder_abs_path)
 
     def __init__(self, output_directory, csv_file_path):
         super().__init__()
@@ -122,7 +122,6 @@ class GraphWorker(QThread):
     def run(self):
         generator = GraphGenerator()
         generator.progress_signal.connect(self.progress_signal)
-        generator.plot_data_signal.connect(self.plot_data_signal)
         generator.completion_signal.connect(self.finished_signal)
         generator.generate_graphs(self.output_directory, self.csv_file_path)
 
@@ -247,7 +246,7 @@ class WeatherGraphsApp(QWidget):
         """
         QMessageBox.about(self, "Acerca del Generador de Gráficos Climáticos", about_message)
 
-    # Function to open the output directory
+    # Function to browse the output directory
     def browse_directory(self):
         directory = QFileDialog.getExistingDirectory(self, "Seleccionar Directorio de Salida")
         if directory:
@@ -285,7 +284,6 @@ class WeatherGraphsApp(QWidget):
 
         self.graph_worker = GraphWorker(output_directory, csv_file_path)
         self.graph_worker.progress_signal.connect(self.update_progress)
-        self.graph_worker.plot_data_signal.connect(plot_with_matplotlib)
         self.graph_worker.finished_signal.connect(self.on_graphs_complete)
         self.graph_worker.start()
 
@@ -320,18 +318,12 @@ class WeatherGraphsApp(QWidget):
     def update_progress(self, value):
         self.progress.setValue(value)
 
-    def on_graphs_complete(self, message):
+    def on_graphs_complete(self, message: str, run_folder_path: str):
         self.hide_loading()
         self.status_label.setText(message)
         if not message.startswith("Error"):
-            # Parse the graficas_* subfolder path from the completion message if present
-            import re
-            m = re.search(r'(graficas_\S+)', message)
-            if m:
-                base = self.directory_edit.text()
-                candidate = os.path.join(base, m.group(1))
-                if os.path.isdir(candidate):
-                    self._last_run_folder = candidate
+            if run_folder_path and os.path.isdir(run_folder_path):
+                self._last_run_folder = run_folder_path
             self.explore_button.setEnabled(True)
 
 

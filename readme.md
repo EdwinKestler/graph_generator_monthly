@@ -35,7 +35,7 @@ A PyQt6 desktop application (Windows) that downloads, processes, and visualises 
 
 ```powershell
 conda activate graph_generator
-python montly_graph.py
+python monthly_graph.py
 ```
 
 The `graph_generator` conda environment is the **only tested working environment**. See [Environment Setup](#environment-setup) for creation instructions.
@@ -66,12 +66,12 @@ conda install -n graph_generator -c conda-forge ^
 
 ```powershell
 conda activate graph_generator
-python montly_graph.py
+python monthly_graph.py
 ```
 
-### Why not `requirements.txt`?
+### Why conda instead of `requirements.txt`?
 
-`requirements.txt` reflects the original development environment (NumPy 1.26, pandas 2.1, PyQt6 6.5 via pip). The conda-managed environment uses newer versions (see [Dependencies](#dependencies)) and manages Qt DLLs correctly via conda-forge, avoiding Windows DLL load failures that occur with pip-installed PyQt6.
+`requirements.txt` lists the 9 minimum runtime packages with floor versions. The conda-managed environment uses newer versions (see [Dependencies](#dependencies)) and manages Qt DLLs correctly via conda-forge, avoiding Windows DLL load failures that occur with pip-installed PyQt6.
 
 **`PyQt6-WebEngine` is intentionally excluded** — it has no conda-forge package and causes DLL errors when pip-installed. The map viewer instead opens the generated map HTML in the system default browser.
 
@@ -80,7 +80,7 @@ python montly_graph.py
 ## Architecture Overview
 
 ```
-montly_graph.py              ← Entry point
+monthly_graph.py              ← Entry point
         ↓
      gui.py                  ← PyQt6 main window, orchestrates all steps
      ├── download_database.py     ← HTTP download of CSV from Google Drive (no auth)
@@ -102,7 +102,7 @@ montly_graph.py              ← Entry point
 
 ```
 graph_generator_monthly/
-├── montly_graph.py              Entry point & folder initialisation
+├── monthly_graph.py              Entry point
 ├── gui.py                       PyQt6 main application window (6 workflow steps)
 ├── data_processing.py           Data preparation + Bokeh HTML generation
 ├── graph_generation.py          Matplotlib PNG generation (runs via QThread)
@@ -143,8 +143,8 @@ graph_generator_monthly/
 ├── dist/
 │   └── generador_graficos_mensual.exe   Distributable Windows executable (96 MB)
 │
-├── generador_graficos_mensual.spec   PyInstaller build spec (entry point stale — see Notes)
-├── requirements.txt                  Original pinned dependencies (outdated — see Notes)
+├── generador_graficos_mensual.spec   PyInstaller build spec
+├── requirements.txt                  Minimal runtime dependencies (pip-installable)
 └── readme.md                         This file
 ```
 
@@ -162,7 +162,7 @@ Each graph generation run creates a new uniquely named `graficas_*` folder — r
 
 ## Source Files
 
-### `montly_graph.py` — Entry Point
+### `monthly_graph.py` — Entry Point
 
 **Purpose:** Entry point. Creates a `QApplication`, shows `WeatherGraphsApp`, and enters the Qt event loop.
 
@@ -193,7 +193,7 @@ Each graph generation run creates a new uniquely named `graficas_*` folder — r
 | ---- | ---- | ----------- |
 | `WeatherGraphsApp` | `QWidget` | Main window; 6-step workflow, progress bar, status label |
 | `DownloadWorker` | `QThread` | Background thread for CSV download; emits `finished_signal(path, msg)` or `error_signal(msg)` |
-| `GraphWorker` | `QThread` | Background thread for graph generation; forwards `progress_signal`, `plot_data_signal`, `finished_signal` from `GraphGenerator` |
+| `GraphWorker` | `QThread` | Background thread for graph generation; forwards `progress_signal` and `finished_signal(msg, run_folder_path)` from `GraphGenerator` |
 | `MapWorker` | `QThread` | Background thread for map generation; emits `finished_signal(map_path, msg)` or `error_signal(msg)` |
 | `LoadingDialog` | `QDialog` | Frameless modal dialog showing `spinning-loading.gif` |
 | `resource_path(relative_path)` | function | Resolves asset paths for both dev (`__file__`) and PyInstaller (`_MEIPASS`) bundle contexts |
@@ -262,8 +262,8 @@ Each graph generation run creates a new uniquely named `graficas_*` folder — r
 
 | | |
 | --- | --- |
-| **Inputs** | CSV file path + output directory (passed to `generate_graphs()`); per-station plotting dict (received via `plot_data_signal`) |
-| **Outputs** | PNG files in `{output_dir}/img_output/` |
+| **Inputs** | CSV file path + output directory (passed to `generate_graphs()`) |
+| **Outputs** | PNG files in `{output_dir}/graficas_*/img_output/` |
 
 **Threading model:**
 
@@ -274,9 +274,10 @@ generate_graphs_wrapper()             GraphWorker.run()
   → GraphWorker.start()         ──►     GraphGenerator.generate_graphs()
                                           for each station:
   update_progress() ◄── progress_signal ──  emit progress_signal
-  plot_with_matplotlib() ◄ plot_data_signal   emit plot_data_signal
-  on_graphs_complete() ◄─ finished_signal ──  emit completion_signal
+                                            plot_with_matplotlib()  ← worker thread
+  on_graphs_complete() ◄ finished_signal ──  emit completion_signal(msg, path)
     hide_loading()
+    set _last_run_folder
     enable Explore button
 ```
 
@@ -285,13 +286,12 @@ generate_graphs_wrapper()             GraphWorker.run()
 | Signal | Payload | Purpose |
 | ------ | ------- | ------- |
 | `progress_signal` | `int` (0–100) | Updates GUI progress bar after each station |
-| `plot_data_signal` | `dict` | Triggers `plot_with_matplotlib()` for each station |
-| `completion_signal` | `str` | Final status message or error string shown in status label |
+| `completion_signal` | `(str, str)` — message + abs folder path | Final status + run folder path; empty string on error |
 
 | Function | Description |
 | -------- | ----------- |
-| `generate_graphs(output_dir, csv_path)` | Reads CSV, builds descriptive run folder, iterates stations, emits all three signals |
-| `plot_with_matplotlib(data_dict)` | Receives dict, creates 12×5 inch three-axis figure, saves PNG; per-station failures are logged as warnings without aborting the loop |
+| `generate_graphs(output_dir, csv_path)` | Reads CSV, builds descriptive run folder, iterates stations, calls `plot_with_matplotlib()` directly (worker thread), emits both signals |
+| `plot_with_matplotlib(data_dict)` | Creates 12×5 inch three-axis figure, saves PNG; per-station failures are logged as warnings without aborting the loop |
 
 **Matplotlib chart axes:**
 
@@ -425,8 +425,8 @@ Each CircleMarker has a hover tooltip (station name + value) and a click popup (
 | Function | Description |
 | --- | --- |
 | `download_file_from_google_drive(file_id, destination)` | Main entry: opens session, handles token, calls `save_response_content` |
-| `get_confirm_token(response)` | Extracts `download_warning` cookie for large-file confirmation bypass |
-| `save_response_content(response, destination)` | Writes response to disk in 32 KB chunks |
+| `_extract_token(response)` | Extracts confirmation token from cookie (legacy) or HTML body regex (current GDrive behaviour) |
+| `save_response_content(response, destination)` | Streams response to disk in 32 KB chunks; raises `ValueError` if first bytes are HTML |
 
 **URL pattern:** `https://drive.google.com/uc?export=download&id={file_id}`
 **Authentication:** None required — file must be publicly shared on Google Drive.
@@ -581,8 +581,8 @@ OpenStreetMap tiles are also used and are the default basemap.
 
 | Output | Location | Format | Size | Produced by |
 | ------ | -------- | ------ | ---- | ----------- |
-| Per-station interactive charts | `<output_dir>/html_output/{station}_{MM-YYYY}.html` | Bokeh HTML | ~50–200 KB each | `data_processing.py` |
-| Per-station static images | `<output_dir>/img_output/{station}.png` | PNG (10×5 in) | ~80–200 KB each | `graph_generation.py` |
+| Per-station interactive charts | `<output_dir>/graficas_{YYYYMMDD}_{YYYYMM}_a_{YYYYMM}/html_output/{station}_{MM-YYYY}.html` | Bokeh HTML | ~50–200 KB each | `data_processing.py` |
+| Per-station static images | `<output_dir>/graficas_{YYYYMMDD}_{YYYYMM}_a_{YYYYMM}/img_output/{station}.png` | PNG (12×5 in) | ~80–200 KB each | `graph_generation.py` |
 | Network map | `<output_dir>/mapa_{YYYYMMDD}_{YYYYMM}.html` | Folium/Leaflet HTML | ~650 KB | `map_viewer.py` |
 
 ---
@@ -593,7 +593,7 @@ All configurable values are embedded directly in source code. There are no `.env
 
 | Parameter | File | Value | How to change |
 | --- | --- | --- | --- |
-| Download file ID | `gui.py` line ~152 | `19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y` | Edit the string literal |
+| Download file ID | `gui.py` — module constant `GDRIVE_FILE_ID` | `19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y` | Edit the constant |
 | Date window | `data_processing.py`, `map_viewer.py` | Last 30 days from dataset max date | Change `pd.Timedelta(days=30)` |
 | Bokeh precipitation Y range | `data_processing.py` | −5 to 90 mm | Edit `y_range=(-5, 90)` |
 | Bokeh temperature Y range | `data_processing.py` | −5 to 40 °C | Edit `Range1d(start=-5, end=40)` |
@@ -615,21 +615,25 @@ Main Thread (Qt Event Loop)
 │
 ├── All GUI rendering and user input handling
 │
-├── Step 1 – Download (main thread, spinner via processEvents)
-│   └── download_file_from_google_drive()   [synchronous, ~1–30 s]
+├── Step 1 – Download (DownloadWorker thread)
+│   └── download_file_from_google_drive()   [~1–30 s]
+│       finished_signal(path, msg) ──► _on_download_complete()
+│       error_signal(msg)          ──► _on_download_error()
 │
-├── Step 4 – Generate graphs (QThread)
+├── Step 4 – Generate graphs (GraphWorker thread)
 │   └── GraphGenerator.generate_graphs()
+│       ├── calls plot_with_matplotlib() per station  [all on worker thread]
 │       ├── Emits progress_signal(int 0–100)  → progress bar update
-│       ├── Emits plot_data_signal(dict)       → plot_with_matplotlib() on main thread
-│       └── Emits completion_signal(str)       → status label update
+│       └── Emits completion_signal(msg, path) → on_graphs_complete()
+│               hide_loading · set _last_run_folder · enable Explore button
 │
-└── Step 4b – Generate map (main thread, spinner shown)
-    └── build_station_summary() + generate_map()   [synchronous, ~1–3 s]
-    └── open_map_in_browser()                       [non-blocking]
+└── Step 4b – Generate map (MapWorker thread)
+    └── build_station_summary() + generate_map()   [~1–5 s]
+        finished_signal(map_path, msg) ──► _on_map_complete()
+        error_signal(msg)              ──► _on_map_error()
 ```
 
-**Note:** Graph generation is the only operation that runs on a background thread. The download (Step 1) and map generation (Step 4b) run synchronously on the main thread but are fast enough (~1–3 s) that the `LoadingDialog` spinner covers the brief freeze.
+**All three slow operations** (download, graph generation, map generation) run on background `QThread` subclasses — the GUI event loop is never blocked.
 
 ---
 
@@ -637,13 +641,15 @@ Main Thread (Qt Event Loop)
 
 ```
 1. USER launches app
-   └─ montly_graph.py: verify/create folders → show WeatherGraphsApp window
+   └─ monthly_graph.py: configure logging → show WeatherGraphsApp window
 
-2. STEP 1 – Download database
-   GUI → download_database.py
-     └─ HTTP GET google.com/uc?id=19gcM1e5rb-...
-     └─ Chunked write → data/insivumeh_{YYYYMMDD}_{YYYYMM}_a_{YYYYMM}.csv
-   Shows LoadingDialog during download
+2. STEP 1 – Download database  [DownloadWorker thread]
+   GUI → DownloadWorker.start()
+     └─ download_database.py: HTTP GET google.com/uc?id=19gcM1e5rb-...
+     └─ Chunked write → data/_download_temp.csv
+     └─ Inspect fecha column → build dated filename
+     └─ Rename → data/insivumeh_{YYYYMMDD}_{YYYYMM}_a_{YYYYMM}.csv
+   finished_signal → csv_edit auto-filled, QMessageBox shown
 
 3. STEP 2 – Select output directory
    GUI → QFileDialog.getExistingDirectory()
@@ -654,36 +660,32 @@ Main Thread (Qt Event Loop)
    → stores path in csv_edit field
    (auto-filled after Step 1 completes)
 
-5. STEP 4 – Generate monthly graphs
-   GUI → GraphGenerator.generate_graphs(output_dir, csv_path)
+5. STEP 4 – Generate monthly graphs  [GraphWorker thread]
+   GUI → GraphWorker.start()
      └─ data_processing.py:
-        read_and_prepare_data() → group by Nombre
+        read_and_prepare_data() → filter last 30 days → group by Nombre
         per station:
-          filter last 30 days → create_bokeh_plot() → save HTML
-          → emit plot_data_signal(dict)
-     └─ graph_generation.py:
-        plot_with_matplotlib(dict) → save PNG
-        emit progress_signal(%) → progress bar 0→100%
-   Shows LoadingDialog. Status label shows completion message.
+          create_bokeh_plot() → save HTML
+          plot_with_matplotlib() → save PNG  ← runs on worker thread
+          emit progress_signal(%) → progress bar 0→100%
+     └─ emit completion_signal(msg, run_folder_path)
+   on_graphs_complete() → hide spinner, set _last_run_folder, enable Explore button
 
-6. STEP 4b – Generate station network map
-   GUI → map_viewer.build_station_summary(csv_path)
-     └─ read CSV → detect date format → filter last 30 days
-     └─ group by Nombre → aggregate 9 variables
-     └─ attach Latitud/Longitud/Altitud
-   GUI → map_viewer.generate_map(summary, output_dir)
-     └─ build folium.Map with 3 base tiles
-     └─ add 5 CircleMarker FeatureGroup layers
-     └─ add HeatMap layer
-     └─ add LayerControl, title banner, legend hint
-     └─ save → <output_dir>/mapa_{YYYYMMDD}_{YYYYMM}.html
-   GUI → open_map_in_browser(map_path)
-     └─ webbrowser.open("file:///...mapa_*.html")
-   Status label: "Mapa generado: 62 estaciones — <path>"
+6. STEP 4b – Generate station network map  [MapWorker thread]
+   GUI → MapWorker.start()
+     └─ map_viewer.build_station_summary(csv_path)
+          read CSV → detect date format → filter last 30 days
+          group by Nombre → aggregate 9 variables → attach Latitud/Longitud/Altitud
+     └─ map_viewer.generate_map(summary, output_dir)
+          build folium.Map with 3 base tiles
+          add 5 CircleMarker FeatureGroup layers + HeatMap layer
+          add LayerControl, title banner, legend hint
+          save → <output_dir>/mapa_{YYYYMMDD}_{YYYYMM}.html
+   finished_signal → open_map_in_browser() · status label updated
 
 7. STEP 5 – Explore generated graphs
-   GUI → os.startfile(output_dir)   [Windows only, falls back on other OS]
-   Opens output folder in Windows Explorer showing html_output/, img_output/
+   GUI → os.startfile(_last_run_folder)   [Windows; xdg-open / open on other OS]
+   Opens graficas_{YYYYMMDD}_{YYYYMM}_a_{YYYYMM}/ subfolder in Explorer
 ```
 
 ---
@@ -723,8 +725,8 @@ flowchart TD
         end
 
         subgraph OUTPUTS["Local output files"]
-            HTML_OUT["html_output/\n{station}_{MM-YYYY}.html\n(Bokeh interactive chart)"]
-            PNG_OUT["img_output/\n{station}.png\n(matplotlib PNG)"]
+            HTML_OUT["graficas_*/html_output/\n{station}_{MM-YYYY}.html\n(Bokeh interactive chart)"]
+            PNG_OUT["graficas_*/img_output/\n{station}.png\n(matplotlib PNG)"]
             MAP_OUT["mapa_*.html\n(Folium/Leaflet · ~650 KB\n5 variable layers)"]
         end
 
@@ -774,8 +776,9 @@ data_processing  graph_generation               map_viewer
  Bokeh chart    dual-axis PNG                   9-variable aggregate
       │            │                            attach lat/lon/alt
       ▼            ▼                                  │
- html_output/  img_output/                            ▼
- *.html         *.png                         <output_dir>/mapa_*.html
+ graficas_*/    graficas_*/                            ▼
+ html_output/   img_output/           <output_dir>/mapa_*.html
+ *.html         *.png
                                               (5 marker layers +
                                                1 heatmap layer)
                                                       │
@@ -889,13 +892,14 @@ pyinstaller generador_graficos_mensual.spec
 
 Output: `dist/generador_graficos_mensual.exe` (~96 MB, self-contained Windows executable)
 
-The `.spec` file bundles these image assets:
+The `.spec` file bundles these assets and library data files:
 
 - `assets/logo_insivumeh.png`
 - `assets/waterco-logo.png`
 - `assets/IUCN_logo.png`
-
-> **Stale entry point:** The spec file currently references `dataset_modified_multythread.py` as the entry point — that file no longer exists. Update `generador_graficos_mensual.spec` to use `montly_graph.py` before rebuilding. Also add `map_viewer.py` to the `hiddenimports` list if folium is not auto-detected.
+- `assets/spinning-loading.gif`
+- All `folium` template/data files (`collect_data_files('folium')`)
+- All `bokeh` template/data files (`collect_data_files('bokeh')`)
 
 ---
 
@@ -930,7 +934,7 @@ Actual versions confirmed working in the `graph_generator` conda environment:
 **Environment:**
 
 - Always use the `graph_generator` conda environment. The base Anaconda environment fails due to a NumPy 1.x/2.x ABI conflict in pyarrow.
-- `requirements.txt` is outdated and was generated from the original development environment. Do not use it to recreate the runtime environment; use the conda install commands in [Environment Setup](#environment-setup).
+- `requirements.txt` lists minimum pip-compatible versions. The conda install commands in [Environment Setup](#environment-setup) are the recommended path — conda-forge manages Qt DLLs correctly on Windows.
 
 **Date formats:**
 
@@ -944,12 +948,7 @@ Actual versions confirmed working in the `graph_generator` conda environment:
 
 **Map viewer — internet required:**
 
-- `map.html` loads Leaflet JS from CDN and Esri/OSM tile servers. It will render the station markers offline but map tiles will not appear without internet access.
-
-**PyInstaller spec — two things to fix before next build:**
-
-1. Update entry point from `dataset_modified_multythread.py` → `montly_graph.py`
-2. Add `map_viewer` to `hiddenimports` and verify `folium` data files are included
+- `mapa_*.html` loads Leaflet JS from CDN and Esri/OSM tile servers. It will render station markers offline but map tiles will not appear without internet access.
 
 **`dev/test_upload.py`:**
 

@@ -1,10 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_data_files
+
+_extra_datas = collect_data_files('folium') + collect_data_files('bokeh')
 
 a = Analysis(
-    ['montly_graph.py'],
+    ['monthly_graph.py'],
     pathex=[],
     binaries=[],
-    datas=[
+    datas=_extra_datas + [
         ('assets\\logo_insivumeh.png',   'assets'),
         ('assets\\waterco-logo.png',     'assets'),
         ('assets\\IUCN_logo.png',        'assets'),
