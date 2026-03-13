@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
 import webbrowser
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from PyQt6.QtGui import QPixmap, QMovie
+from data_processing import detect_date_format
 from download_database import download_file_from_google_drive
 from graph_generation import GraphGenerator, plot_with_matplotlib
 from upload_database import upload_to_drive
@@ -201,7 +202,7 @@ class WeatherGraphsApp(QWidget):
             import pandas as pd
             df_dates = pd.read_csv(temp_path, usecols=['fecha'], low_memory=False)
             sample = str(df_dates['fecha'].dropna().iloc[0]).strip()
-            date_fmt = '%Y-%m-%d' if len(sample) >= 10 and sample[4] == '-' else '%d/%m/%Y'
+            date_fmt = detect_date_format(sample)
             fechas = pd.to_datetime(df_dates['fecha'], format=date_fmt)
             data_start = fechas.min().strftime('%Y%m')
             data_end   = fechas.max().strftime('%Y%m')

@@ -6,12 +6,14 @@ meteorological stations, colour-coded by 30-day aggregated statistics.
 
 Inputs
 ------
-- CSV file path  : download-database.csv (YYYY-MM-DD) or database.csv (DD/MM/YYYY)
-- output_dir     : directory where map.html is saved
+- CSV file path  : insivumeh_YYYYMMDD_YYYYMM_a_YYYYMM.csv  (YYYY-MM-DD dates)
+                   or database.csv (DD/MM/YYYY dates)
+- output_dir     : directory where the map file is saved
 
 Outputs
 -------
-- <output_dir>/map.html   : self-contained Leaflet map (~500 KB, no server required)
+- <output_dir>/mapa_YYYYMMDD_YYYYMM.html   : self-contained Leaflet map
+                                              (~500 KB, no server required)
 
 Map layers (toggle via LayerControl)
 -------------------------------------
@@ -24,18 +26,19 @@ Map layers (toggle via LayerControl)
 
 Popup on each marker shows all aggregated stats for that station.
 
-Dependencies (all in requirements.txt)
----------------------------------------
-folium==0.14.0, matplotlib==3.8.0, pandas==2.1.1, numpy==1.26.0
+Dependencies: folium, matplotlib, pandas, numpy
+(install via the graph_generator conda environment — see readme.md)
 """
 
 import os
+from datetime import date
 import pandas as pd
 import numpy as np
 import matplotlib
 import matplotlib.colors as mcolors
 import folium
 from folium.plugins import HeatMap
+from data_processing import detect_date_format
 
 
 # ── Map defaults ────────────────────────────────────────────────────────────
@@ -86,16 +89,6 @@ VARIABLES: dict = {
 
 # ── Data preparation ─────────────────────────────────────────────────────────
 
-def _detect_date_format(df: pd.DataFrame) -> str:
-    """Return the strptime format string that matches the 'fecha' column."""
-    sample = str(df["fecha"].dropna().iloc[0]).strip()
-    # YYYY-MM-DD  (download-database.csv)
-    if len(sample) >= 10 and sample[4] == "-":
-        return "%Y-%m-%d"
-    # DD/MM/YYYY  (database.csv)
-    return "%d/%m/%Y"
-
-
 def build_station_summary(csv_path: str) -> pd.DataFrame:
     """
     Read the meteorological CSV and return one row per station with
@@ -116,8 +109,8 @@ def build_station_summary(csv_path: str) -> pd.DataFrame:
     """
     df = pd.read_csv(csv_path, header=0, low_memory=False)
 
-    date_fmt = _detect_date_format(df)
-    df["fecha"] = pd.to_datetime(df["fecha"], format=date_fmt)
+    sample = str(df["fecha"].dropna().iloc[0]).strip()
+    df["fecha"] = pd.to_datetime(df["fecha"], format=detect_date_format(sample))
 
     # Filter to the last 30 days from the dataset's most recent date
     max_date = df["fecha"].max()
@@ -299,6 +292,12 @@ def generate_map(summary: pd.DataFrame, output_dir: str) -> str:
     Returns:
         Absolute path to the saved map.html file.
     """
+    os.makedirs(output_dir, exist_ok=True)
+
+    run_date   = date.today().strftime('%Y%m%d')
+    data_month = pd.Timestamp(summary['last_fecha'].max()).strftime('%Y%m')
+    map_name   = f"mapa_{run_date}_{data_month}.html"
+
     m = folium.Map(location=GUATEMALA_CENTER, zoom_start=DEFAULT_ZOOM, tiles=None)
 
     # ── Base tile layers ─────────────────────────────────────────────────────
@@ -364,7 +363,6 @@ def generate_map(summary: pd.DataFrame, output_dir: str) -> str:
     """
     m.get_root().html.add_child(folium.Element(legend_html))
 
-    os.makedirs(output_dir, exist_ok=True)
-    out_path = os.path.join(output_dir, "map.html")
+    out_path = os.path.join(output_dir, map_name)
     m.save(out_path)
     return os.path.abspath(out_path)

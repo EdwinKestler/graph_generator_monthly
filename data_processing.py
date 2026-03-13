@@ -3,13 +3,32 @@ from bokeh.plotting import figure, output_file, save
 from bokeh.models import Range1d, LinearAxis, HoverTool
 import os
 
+
+def detect_date_format(sample: str) -> str:
+    """
+    Return the strptime format string that matches an INSIVUMEH fecha sample value.
+
+    Supports:
+      - YYYY-MM-DD  (insivumeh_*.csv — primary download file)
+      - DD/MM/YYYY  (database.csv   — local historical copy)
+
+    Args:
+        sample: A single non-null value from the 'fecha' column, as a string.
+
+    Returns:
+        A strptime format string: '%Y-%m-%d' or '%d/%m/%Y'.
+    """
+    s = str(sample).strip()
+    return "%Y-%m-%d" if len(s) >= 10 and s[4] == "-" else "%d/%m/%Y"
+
+
 def read_and_prepare_data(csv_file_path):
     """
     Read and prepare data from a CSV file.
 
     Supports both date formats used by INSIVUMEH CSVs:
-      - YYYY-MM-DD  (download-database.csv)
-      - DD/MM/YYYY  (database.csv)
+      - YYYY-MM-DD  (insivumeh_*.csv — primary download file)
+      - DD/MM/YYYY  (database.csv   — local historical copy)
 
     Args:
         csv_file_path (str): Path to the CSV file.
@@ -19,8 +38,7 @@ def read_and_prepare_data(csv_file_path):
     """
     df = pd.read_csv(csv_file_path, header=0, delimiter=',')
     sample = str(df['fecha'].dropna().iloc[0]).strip()
-    date_format = "%Y-%m-%d" if len(sample) >= 10 and sample[4] == "-" else "%d/%m/%Y"
-    df['fecha'] = pd.to_datetime(df['fecha'], format=date_format)
+    df['fecha'] = pd.to_datetime(df['fecha'], format=detect_date_format(sample))
     return df
 
 def prepare_data_for_graphs(df):
