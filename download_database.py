@@ -85,8 +85,11 @@ def download_file_from_google_drive(file_id, destination):
     URL = "https://drive.google.com/uc?export=download"
 
     try:
+        # 15 s connect timeout, 120 s read timeout — prevents infinite hang
+        _TIMEOUT = (15, 120)
+
         session = requests.Session()
-        response = session.get(URL, params={'id': file_id}, stream=True)
+        response = session.get(URL, params={'id': file_id}, stream=True, timeout=_TIMEOUT)
 
         if response.status_code != 200:
             logging.error(f"Error downloading file: HTTP {response.status_code}")
@@ -95,7 +98,10 @@ def download_file_from_google_drive(file_id, destination):
         token = _extract_token(response)
 
         if token:
-            response = session.get(URL, params={'id': file_id, 'confirm': token}, stream=True)
+            response = session.get(
+                URL, params={'id': file_id, 'confirm': token},
+                stream=True, timeout=_TIMEOUT,
+            )
             if response.status_code != 200:
                 logging.error(f"Error downloading after confirmation: HTTP {response.status_code}")
                 return False

@@ -142,7 +142,7 @@ def save_plot(fig, station_name, month_year_str, directory_html):
         month_year_str (str): Month and year as a string.
         directory_html (str): Directory for HTML output.
     """
-    filename = f'{station_name}_{month_year_str}.html'
+    filename = f'{os.path.basename(station_name)}_{month_year_str}.html'
     output_file(os.path.join(directory_html, filename))
     fig.legend.background_fill_alpha = 0.5
     fig.legend.label_text_font_size = "8pt"

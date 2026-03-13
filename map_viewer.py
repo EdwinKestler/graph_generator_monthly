@@ -30,6 +30,7 @@ Dependencies: folium, matplotlib, pandas, numpy
 (install via the graph_generator conda environment — see readme.md)
 """
 
+import html as _html
 import io
 import base64
 import os
@@ -272,8 +273,8 @@ def _value_to_radius(value, vmin: float, vmax: float,
 
 def _popup_html(row: pd.Series, hist_b64: str = "") -> str:
     """Build the HTML content displayed when a station marker is clicked."""
-    name = str(row["Nombre"]).replace("_", " ")
-    station_id = row.get("station_id", "—")
+    name = _html.escape(str(row["Nombre"]).replace("_", " "))
+    station_id = _html.escape(str(row.get("station_id", "—")))
     altitud = row.get("Altitud")
     last_fecha = row.get("last_fecha")
 

@@ -94,7 +94,7 @@ def plot_with_matplotlib(data):
         plt.title(f"Datos de {estacion}")
         fig.tight_layout()
 
-        save_path = os.path.join(directory_img, f"{estacion}.png")
+        save_path = os.path.join(directory_img, f"{os.path.basename(estacion)}.png")
         plt.savefig(save_path)
         plt.close(fig)
 
