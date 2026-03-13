@@ -163,19 +163,17 @@ graph_generator_monthly/
 
 ### `montly_graph.py` — Entry Point
 
-**Purpose:** Bootstraps the application: creates required folders, then launches the GUI.
+**Purpose:** Entry point. Creates a `QApplication`, shows `WeatherGraphsApp`, and enters the Qt event loop.
 
 | | |
 | --- | --- |
 | **Inputs** | None |
 | **Outputs** | Launches the `WeatherGraphsApp` window |
-| **Side effects** | Creates `main_folder/`, `main_folder/data/`, `main_folder/output-folder/`, `main_folder/assets/` if they do not exist |
+| **Side effects** | None — working directories (`data/`, `assets/`) are created inline by the modules that need them |
 
 | Function | Description |
 | --- | --- |
 | `main()` | Creates `QApplication`, shows `WeatherGraphsApp`, enters Qt event loop |
-| `verify_and_create_folders()` | Creates required subdirectories if absent |
-| `resource_path(relative_path)` | Resolves asset paths for both dev (`__file__`) and PyInstaller (`_MEIPASS`) contexts |
 
 ---
 
@@ -196,6 +194,7 @@ graph_generator_monthly/
 | `Worker` | `QThread` | Background thread for Google Drive upload (prevents GUI freeze) |
 | `GraphWorker` | `QThread` | Background thread for graph generation; forwards `progress_signal`, `plot_data_signal`, `finished_signal` from `GraphGenerator` |
 | `LoadingDialog` | `QDialog` | Frameless modal dialog showing `spinning-loading.gif` |
+| `resource_path(relative_path)` | function | Resolves asset paths for both dev (`__file__`) and PyInstaller (`_MEIPASS`) bundle contexts |
 | `open_map_in_browser(map_path)` | function | Opens `map.html` in the system default browser via `webbrowser.open()` |
 
 **Eight workflow steps exposed by the GUI:**
@@ -288,7 +287,7 @@ generate_graphs_wrapper()             GraphWorker.run()
 
 | Function | Description |
 | -------- | ----------- |
-| `generate_graphs(output_dir, csv_path)` | Reads CSV, iterates stations, emits all three signals |
+| `generate_graphs(output_dir, csv_path)` | Reads CSV, builds descriptive run folder, iterates stations, emits all three signals |
 | `plot_with_matplotlib(data_dict)` | Receives dict, creates 12×5 inch three-axis figure, saves PNG; per-station failures are logged as warnings without aborting the loop |
 
 **Matplotlib chart axes:**
@@ -301,7 +300,20 @@ generate_graphs_wrapper()             GraphWorker.run()
 | Right | `tmax` — max temp (°C) | −5 to 40 | Dashed FireBrick line |
 | Far right (+60 pt) | `hum_rel` — relative humidity (%) | 0 to 100 | Dotted darkorange line |
 
-**Output file naming:** `{output_dir}/img_output/{station_name}.png`
+**Output folder naming** — mirrors the download file convention:
+
+```text
+{output_dir}/graficas_{run_date}_{data_start}_a_{data_end}/
+               │          │         │               └─ latest month in the CSV
+               │          │         └─ earliest month in the CSV
+               │          └─ date graphs were generated (YYYYMMDD)
+               └─ output type identifier
+
+├── img_output/    ← matplotlib PNG files   ({station_name}.png)
+└── html_output/   ← Bokeh interactive HTML ({station_name}_{MM-YYYY}.html)
+```
+
+Each generation run creates a new uniquely named folder — re-running never overwrites previous output.
 
 ---
 
