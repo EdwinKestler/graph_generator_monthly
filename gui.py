@@ -1,6 +1,7 @@
 import sys
 import subprocess
 import os
+from datetime import date
 from PyQt6.QtWidgets import (
     QApplication, QLabel, QVBoxLayout, QWidget, QPushButton, QFileDialog,
     QLineEdit, QProgressBar, QDialog, QMessageBox, QHBoxLayout
@@ -157,25 +158,51 @@ class WeatherGraphsApp(QWidget):
     # Function to download the database
     def download_database(self):
         try:
-            self.show_loading()  # Show loading spinner
+            self.show_loading()
             file_id = '19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y'
-            destination = 'data\\download-database.csv'
-            
-            # Check if the directory exists and create if not
-            os.makedirs(os.path.dirname(destination), exist_ok=True)
-            
-            success = download_file_from_google_drive(file_id, destination)
+            data_dir = 'data'
+            os.makedirs(data_dir, exist_ok=True)
 
-            if success:
-                self.csv_edit.setText(destination)
-                QMessageBox.information(self, 'Descarga completada', 'Base de datos descargada Exitosamente!')
-            else:
-                QMessageBox.critical(self, 'Error de descarga', 'No se pudo descargar la base de datos. Verifique su conexión e intente de nuevo.')
-            
+            # Download to a fixed temp path first so we can inspect the content
+            temp_path = os.path.join(data_dir, '_download_temp.csv')
+            success = download_file_from_google_drive(file_id, temp_path)
+
+            if not success:
+                QMessageBox.critical(self, 'Error de descarga',
+                    'No se pudo descargar la base de datos. '
+                    'Verifique su conexión e intente de nuevo.')
+                return
+
+            # Read fecha column to determine data period
+            import pandas as pd
+            df_dates = pd.read_csv(temp_path, usecols=['fecha'], low_memory=False)
+            sample = str(df_dates['fecha'].dropna().iloc[0]).strip()
+            date_fmt = '%Y-%m-%d' if len(sample) >= 10 and sample[4] == '-' else '%d/%m/%Y'
+            fechas = pd.to_datetime(df_dates['fecha'], format=date_fmt)
+            data_start = fechas.min().strftime('%Y%m')
+            data_end   = fechas.max().strftime('%Y%m')
+
+            # Build descriptive filename:  insivumeh_YYYYMMDD_YYYYMM_a_YYYYMM.csv
+            download_date = date.today().strftime('%Y%m%d')
+            final_name = f'insivumeh_{download_date}_{data_start}_a_{data_end}.csv'
+            final_path = os.path.join(data_dir, final_name)
+
+            os.replace(temp_path, final_path)
+
+            self.csv_edit.setText(final_path)
+            QMessageBox.information(self, 'Descarga completada',
+                f'Base de datos descargada exitosamente.\n\nArchivo: {final_name}\n'
+                f'Período de datos: {data_start[:4]}-{data_start[4:]} '
+                f'a {data_end[:4]}-{data_end[4:]}')
+
         except Exception as e:
+            # Clean up temp file if something went wrong after download
+            temp_path = os.path.join('data', '_download_temp.csv')
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
             QMessageBox.critical(self, 'Error', f'Ocurrió un error durante la descarga: {str(e)}')
         finally:
-            self.hide_loading()  # Hide loading spinner whether download succeeds or fails
+            self.hide_loading()
         
     # Function to show "About" dialog
     def show_about(self):
