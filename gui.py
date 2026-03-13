@@ -12,7 +12,6 @@ from PyQt6.QtGui import QPixmap, QMovie
 from data_processing import detect_date_format
 from download_database import download_file_from_google_drive
 from graph_generation import GraphGenerator, plot_with_matplotlib
-from upload_database import upload_to_drive
 from map_viewer import build_station_summary, generate_map
 
 
@@ -43,27 +42,6 @@ def open_map_in_browser(map_path: str) -> None:
     webbrowser.open(f"file:///{map_path.replace(os.sep, '/')}")
 
 
-class Worker(QThread):
-    progress_signal = pyqtSignal(int)
-    plot_data_signal = pyqtSignal(object)
-    finished_signal = pyqtSignal(str)
-
-    def __init__(self, file_path=None, task=None, service_account_file=None):
-        super().__init__()  # Corrected
-        self.file_path = file_path
-        self.task = task
-        self.service_account_file = service_account_file
-
-
-    def run(self):
-        if self.task == 'upload':
-            try:
-                message = upload_to_drive(self.file_path, self.service_account_file)
-                self.finished_signal.emit(message)
-            except Exception as e:
-                self.finished_signal.emit(f"Error al subir archivo: {e}")
-
-
 class GraphWorker(QThread):
     progress_signal = pyqtSignal(int)
     plot_data_signal = pyqtSignal(object)
@@ -85,7 +63,6 @@ class GraphWorker(QThread):
 class WeatherGraphsApp(QWidget):
     def __init__(self):
         super().__init__()
-        self.service_account_file = None  # Initialize variable to store the service account file path
         self.init_ui()
         
 
@@ -141,22 +118,7 @@ class WeatherGraphsApp(QWidget):
 
         self.status_label = QLabel("")
         main_layout.addWidget(self.status_label)
-        
-        
-        # Add button to select the service account file
-        self.select_service_account_button = QPushButton("6. Seleccionar Archivo de autenticación de cuenta")
-        self.select_service_account_button.clicked.connect(self.browse_service_account_file)
-        main_layout.addWidget(self.select_service_account_button)
-        
-        # Add UI components for file upload
-        self.upload_file_button = QPushButton("7. Enviar base de datos .csv a INSIVUMEH")
-        self.upload_file_button.clicked.connect(self.browse_upload_file)
-        main_layout.addWidget(self.upload_file_button)
 
-        self.upload_status_label = QLabel("")
-        main_layout.addWidget(self.upload_status_label)
-                
-        
         self.about_button = QPushButton("Acerca de")
         self.about_button.clicked.connect(self.show_about)
         main_layout.addWidget(self.about_button)
@@ -322,34 +284,6 @@ class WeatherGraphsApp(QWidget):
         if not message.startswith("Error"):
             self.explore_button.setEnabled(True)
     
-    def browse_service_account_file(self):
-        file_filter = "JSON Files (*.json);;All Files (*)"
-        file_name, _ = QFileDialog.getOpenFileName(self, "Seleccionar archivo de cuenta de servicio", "", file_filter)
-        if file_name:
-            self.service_account_file = file_name
-            self.upload_status_label.setText("Archivo de cuenta de servicio seleccionado.")
-    
-    def browse_upload_file(self):
-        file_filter = "All Files (*)"
-        file_name, _ = QFileDialog.getOpenFileName(self, "Seleccionar archivo para subir", "", file_filter)
-        if file_name:
-            self.upload_file(file_name)
-
-    def upload_file(self, file_path):
-        # Check if service account file is selected
-        if not self.service_account_file:
-            QMessageBox.warning(self, "Advertencia", "Por favor, seleccione el archivo de cuenta de servicio primero.")
-            return
-        # Update UI to reflect upload status
-        self.upload_status_label.setText("Subiendo archivo... porfavor espere.")
-        # Start upload in a new thread
-        self.upload_worker = Worker(file_path=file_path, task='upload', service_account_file=self.service_account_file)
-        self.upload_worker.finished_signal.connect(self.upload_finished)
-        self.upload_worker.start()
-
-    def upload_finished(self, message):
-        self.upload_status_label.setText(message)
-
 def main():
     app = QApplication(sys.argv)
     window = WeatherGraphsApp()
