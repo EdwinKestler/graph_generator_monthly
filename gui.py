@@ -164,13 +164,13 @@ class WeatherGraphsApp(QWidget):
             # Check if the directory exists and create if not
             os.makedirs(os.path.dirname(destination), exist_ok=True)
             
-            download_file_from_google_drive(file_id, destination)
-            
-            # Update the CSV file path input after download
-            self.csv_edit.setText(destination)
-            
-            # Notify the user that the database has been downloaded
-            QMessageBox.information(self, 'Descarga completada', 'Base de datos descargada Exitosamente!')
+            success = download_file_from_google_drive(file_id, destination)
+
+            if success:
+                self.csv_edit.setText(destination)
+                QMessageBox.information(self, 'Descarga completada', 'Base de datos descargada Exitosamente!')
+            else:
+                QMessageBox.critical(self, 'Error de descarga', 'No se pudo descargar la base de datos. Verifique su conexión e intente de nuevo.')
             
         except Exception as e:
             QMessageBox.critical(self, 'Error', f'Ocurrió un error durante la descarga: {str(e)}')
