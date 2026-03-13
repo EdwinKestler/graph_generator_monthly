@@ -1,0 +1,15 @@
+name: graph_generator
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pyqt6>=6.5
+  - pandas>=2.0
+  - numpy>=1.26
+  - matplotlib>=3.8
+  - bokeh>=3.4
+  - folium>=0.14
+  - requests>=2.31
+  - pillow
+  - pyinstaller        # build-only; not bundled into the exe

@@ -1,6 +1,8 @@
 # Graph Generator Monthly
 ### Generador de Series de Tiempo Mensuales (Últimos 30 días)
 
+[![Build Windows EXE](https://github.com/EdwinKestler/graph_generator_monthly/actions/workflows/build.yml/badge.svg)](https://github.com/EdwinKestler/graph_generator_monthly/actions/workflows/build.yml)
+
 A PyQt6 desktop application (Windows) that downloads, processes, and visualises monthly meteorological time-series data from Guatemala's National Meteorological Network (Red Meteorológica Nacional – INSIVUMEH).
 
 **Outputs per run:**
@@ -54,13 +56,10 @@ The default Anaconda `base` environment has a NumPy version conflict that preven
 ### Create the environment (one-time)
 
 ```powershell
-conda create -n graph_generator python=3.11 -y
-
-conda install -n graph_generator -c conda-forge ^
-    pyqt6 pandas numpy matplotlib folium bokeh ^
-    requests google-auth google-auth-httplib2 ^
-    google-api-python-client pillow -y
+conda env create -f environment.yml
 ```
+
+This reads `environment.yml` at the project root and installs all runtime and build dependencies via conda-forge.
 
 ### Activate before running
 
@@ -893,6 +892,27 @@ The network covers **67 stations** operated by INSIVUMEH across Guatemala. Stati
 
 ## Building the Executable
 
+### Automated (GitHub Actions — recommended)
+
+The workflow at `.github/workflows/build.yml` builds the exe automatically:
+
+| Trigger | Result |
+| ------- | ------ |
+| Push to `main` | Exe built; downloadable as a workflow artifact for 30 days |
+| Push a `vX.Y.Z` tag | Exe built; GitHub Release created with exe attached |
+| Manual dispatch | Exe built; downloadable as a workflow artifact |
+
+To publish a release:
+
+```powershell
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+The release appears at `https://github.com/EdwinKestler/graph_generator_monthly/releases` within a few minutes.
+
+### Manual (local)
+
 ```powershell
 conda activate graph_generator
 pyinstaller generador_graficos_mensual.spec
@@ -925,13 +945,12 @@ Actual versions confirmed working in the `graph_generator` conda environment:
 | folium | 0.20.0 | Leaflet.js map generation (map_viewer.py) |
 | bokeh | 3.9.0 | Interactive HTML chart generation |
 | requests | 2.32.3 | HTTP chunked download from Google Drive |
-| google-auth | 2.49.1 | Service account authentication |
-| google-auth-httplib2 | 0.3.0 | HTTP transport adapter for google-auth |
-| google-api-python-client | 2.192.0 | Google Drive API v3 client |
 | Pillow | — | Logo image handling in GUI |
+| pyinstaller | — | Build-only: packages the app into a self-contained Windows exe |
 
 **Not installed / not needed:**
 
+- `google-auth`, `google-api-python-client` — upload feature was removed; no longer imported
 - `PyQt6-WebEngine` — no conda-forge package; map opens in system browser instead
 - `selenium` / `chromedriver` — original PNG export method, replaced by matplotlib
 
