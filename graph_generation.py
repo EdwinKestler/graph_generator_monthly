@@ -58,13 +58,18 @@ def plot_with_matplotlib(data):
         estacion = data['estacion']
         directory_img = data['directory_img']
 
+        # Data-driven axis limits so high-rainfall or unusual-temp days are never clipped
+        lluvia_top = max(pd.to_numeric(lluvia, errors='coerce').max() * 1.15, 30)
+        temp_lo    = min(pd.to_numeric(tmin,   errors='coerce').min() - 2,  -5)
+        temp_hi    = max(pd.to_numeric(tmax,   errors='coerce').max() + 3,  40)
+
         fig, ax1 = plt.subplots(figsize=(12, 5))
 
         ax1.set_xlabel('Fecha')
         ax1.set_ylabel('Precipitación (mm)', color='tab:blue')
         ax1.plot(fecha, lluvia, color='tab:blue', label='Precipitación')
         ax1.tick_params(axis='y', labelcolor='tab:blue')
-        ax1.set_ylim(-5, 90)
+        ax1.set_ylim(-5, lluvia_top)
 
         ax2 = ax1.twinx()
         ax2.set_ylabel('Temperatura (°C)', color='tab:red')
@@ -72,7 +77,7 @@ def plot_with_matplotlib(data):
         ax2.plot(fecha, tmin, color='deepskyblue', linestyle='--', label='Temp Min')
         ax2.plot(fecha, tmax, color='firebrick', linestyle='--', label='Temp Max')
         ax2.tick_params(axis='y', labelcolor='tab:red')
-        ax2.set_ylim(-5, 40)
+        ax2.set_ylim(temp_lo, temp_hi)
 
         ax3 = ax1.twinx()
         ax3.spines['right'].set_position(('outward', 60))

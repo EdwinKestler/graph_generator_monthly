@@ -322,12 +322,12 @@ Each generation run creates a new uniquely named folder — re-running never ove
 
 ### `map_viewer.py` — Folium Station-Network Map
 
-**Purpose:** Reads the CSV, aggregates the last 30 days per station, and generates a single self-contained `mapa_{YYYYMMDD}_{YYYYMM}.html` showing all stations on an interactive Leaflet map. The map has multiple switchable layers and a click-popup with all stats per station.
+**Purpose:** Reads the CSV, aggregates the last 30 days per station, and generates a single self-contained `mapa_{YYYYMMDD}_{YYYYMM}.html` showing all stations on an interactive Leaflet map. The map has multiple switchable layers. Each station marker's click-popup shows 30-day aggregated stats **plus an embedded monthly history chart** (rainfall bars + mean-temperature line spanning the full CSV date range).
 
 | | |
 | --- | --- |
-| **Inputs** | CSV file path (passed to `build_station_summary()`), output directory |
-| **Outputs** | `{output_dir}/mapa_{YYYYMMDD}_{YYYYMM}.html` — fully self-contained Leaflet HTML (~650 KB, no server required) |
+| **Inputs** | CSV file path, output directory |
+| **Outputs** | `{output_dir}/mapa_{YYYYMMDD}_{YYYYMM}.html` — fully self-contained Leaflet HTML (no server required; chart images embedded as base64 PNGs) |
 | **Requirements** | Stations must have non-null `Latitud` and `Longitud` columns |
 
 **Module-level constants:**
@@ -353,7 +353,8 @@ Each generation run creates a new uniquely named folder — re-running never ove
 | Function | Signature | Description |
 | -------- | --------- | ----------- |
 | `build_station_summary` | `(csv_path: str) → DataFrame` | Reads CSV, detects date format, filters last 30 days globally, aggregates per station, attaches lat/lon/alt. Returns one row per station. Raises `ValueError` if no stations have coordinates. |
-| `generate_map` | `(summary: DataFrame, output_dir: str) → str` | Builds Folium map with all layers, saves `mapa_{YYYYMMDD}_{YYYYMM}.html` (dated filename), returns absolute path. |
+| `build_station_history` | `(csv_path: str) → dict[str, DataFrame]` | Reads the full CSV and returns monthly-aggregated history for every station. Dict key = station `Nombre`; value = DataFrame with columns `month, lluvia_total, tseca_mean, tmin_mean, tmax_mean, hum_rel_mean` sorted ascending. |
+| `generate_map` | `(summary: DataFrame, output_dir: str, history: dict = None) → str` | Builds Folium map with all layers, saves `mapa_{YYYYMMDD}_{YYYYMM}.html` (dated filename), returns absolute path. When `history` is provided, each marker popup includes an embedded historical chart. |
 
 **Output file naming:**
 
@@ -372,8 +373,10 @@ Example:  mapa_20260313_202603.html
 | --- | --- |
 | `_value_to_hex(value, vmin, vmax, cmap_name)` | Scalar → hex colour string via matplotlib colormap. Returns `#aaaaaa` for NaN. |
 | `_value_to_radius(value, vmin, vmax, rmin, rmax)` | Scalar → circle radius using √-scaling |
-| `_popup_html(row)` | `pd.Series` → HTML table string shown in marker popup |
-| `_add_variable_layer(m, summary, var_key, show)` | Adds one `folium.FeatureGroup` of CircleMarkers to the map |
+| `_build_sparklines(history)` | Pre-renders base64 sparkline PNGs for all stations (called once before building layers) |
+| `_sparkline_b64(monthly_df)` | Renders a small dual-axis matplotlib chart (blue bars = monthly rainfall, orange line = mean temperature) and returns it as a base64 PNG string |
+| `_popup_html(row, hist_b64)` | `pd.Series` + optional base64 PNG → HTML table string shown in marker popup |
+| `_add_variable_layer(m, summary, var_key, show, sparklines)` | Adds one `folium.FeatureGroup` of CircleMarkers to the map; passes per-station sparkline to each popup |
 
 **`build_station_summary` output DataFrame columns:**
 
@@ -595,11 +598,11 @@ All configurable values are embedded directly in source code. There are no `.env
 | --- | --- | --- | --- |
 | Download file ID | `gui.py` — module constant `GDRIVE_FILE_ID` | `19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y` | Edit the constant |
 | Date window | `data_processing.py`, `map_viewer.py` | Last 30 days from dataset max date | Change `pd.Timedelta(days=30)` |
-| Bokeh precipitation Y range | `data_processing.py` | −5 to 90 mm | Edit `y_range=(-5, 90)` |
-| Bokeh temperature Y range | `data_processing.py` | −5 to 40 °C | Edit `Range1d(start=-5, end=40)` |
+| Bokeh precipitation Y range | `data_processing.py` | −5 to 90 mm (fixed) | Edit `y_range=(-5, 90)` — interactive charts can be panned/zoomed |
+| Bokeh temperature Y range | `data_processing.py` | −5 to 40 °C (fixed) | Edit `Range1d(start=-5, end=40)` |
 | Bokeh figure dimensions | `data_processing.py` | 800 × 400 px | Edit `height=400, width=800` |
 | Matplotlib figure dimensions | `graph_generation.py` | 10 × 5 inches | Edit `figsize=(10, 5)` |
-| Matplotlib temperature Y range | `graph_generation.py` | −5 to 40 °C | Edit `ax2.set_ylim(-5, 40)` |
+| Matplotlib axis ranges | `graph_generation.py` | Data-driven (rainfall ×1.15 headroom, temp ±2–3 °C pad) | Computed from `tmin`/`tmax`/`lluvia` each run — no config needed |
 | Download chunk size | `download_database.py` | 32,768 bytes (32 KB) | Edit `CHUNK_SIZE` constant |
 | Map centre | `map_viewer.py` | `[15.5, -90.3]` (Guatemala) | Edit `GUATEMALA_CENTER` |
 | Map default zoom | `map_viewer.py` | `7` | Edit `DEFAULT_ZOOM` |
@@ -676,9 +679,14 @@ Main Thread (Qt Event Loop)
      └─ map_viewer.build_station_summary(csv_path)
           read CSV → detect date format → filter last 30 days
           group by Nombre → aggregate 9 variables → attach Latitud/Longitud/Altitud
-     └─ map_viewer.generate_map(summary, output_dir)
+     └─ map_viewer.build_station_history(csv_path)
+          read full CSV → group by Nombre + calendar month → aggregate 5 variables
+          returns dict {station_name → monthly DataFrame}
+     └─ map_viewer.generate_map(summary, output_dir, history)
+          pre-render per-station sparkline PNGs (base64, embedded in popups)
           build folium.Map with 3 base tiles
           add 5 CircleMarker FeatureGroup layers + HeatMap layer
+          each marker popup: 30-day stats table + historical chart image
           add LayerControl, title banner, legend hint
           save → <output_dir>/mapa_{YYYYMMDD}_{YYYYMM}.html
    finished_signal → open_map_in_browser() · status label updated

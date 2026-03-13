@@ -1,5 +1,7 @@
 import sys
 import logging
+import matplotlib
+matplotlib.use('Agg')   # force non-interactive backend before any pyplot import
 from PyQt6.QtWidgets import QApplication
 from gui import WeatherGraphsApp
 
