@@ -1,0 +1,20 @@
+# Generated application output — never commit
+main_folder/
+
+# PyInstaller build artefacts
+build/
+dist/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Dev test scratch files
+dev/test_output.txt
+dev/import_log.txt
+dev/pandas_log.txt
+
+# Secrets / credentials
+*.json
+!dev/

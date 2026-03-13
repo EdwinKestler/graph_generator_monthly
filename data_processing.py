@@ -25,15 +25,20 @@ def read_and_prepare_data(csv_file_path):
 
 def prepare_data_for_graphs(df):
     """
-    Group data for graph preparation.
+    Filter to the global last 30 days then group by station.
+
+    Using the dataset-wide maximum date (not per-station) ensures that
+    stations which stopped reporting are not shown as artificially current.
 
     Args:
         df (pd.DataFrame): Input DataFrame.
 
     Returns:
-        pd.DataFrameGroupBy: Grouped data.
+        pd.DataFrameGroupBy: Grouped data limited to the last 30 days.
     """
-    return df.groupby('Nombre')
+    max_date = df['fecha'].max()
+    cutoff = max_date - pd.Timedelta(days=30)
+    return df[df['fecha'] >= cutoff].groupby('Nombre')
 
 def process_grouped_data(name, group, directory_img, directory_html):
     """
@@ -48,19 +53,16 @@ def process_grouped_data(name, group, directory_img, directory_html):
     Returns:
         dict: Data for further processing or matplotlib plotting.
     """
-    df = group.copy()
-    latest_date = df['fecha'].max()
-    month_year_str = latest_date.strftime("%m-%Y")
-    thirty_days_ago = latest_date - pd.Timedelta(days=30)
-    last_30_days_data = df[df['fecha'] >= thirty_days_ago].sort_values("fecha")
-    last_30_days_data['Nombre'] = last_30_days_data['Nombre'].replace('_', ' ', regex=True)
+    df = group.copy().sort_values("fecha")
+    month_year_str = df['fecha'].max().strftime("%m-%Y")
+    df['Nombre'] = df['Nombre'].replace('_', ' ', regex=True)
 
     # Plotting
-    fig = create_bokeh_plot(last_30_days_data, name)
+    fig = create_bokeh_plot(df, name)
     save_plot(fig, name, month_year_str, directory_html)
 
     # Data for further processing or matplotlib plotting
-    return extract_plotting_data(last_30_days_data, name, directory_img)
+    return extract_plotting_data(df, name, directory_img)
 
 def create_bokeh_plot(data, station_name):
     """
@@ -86,15 +88,20 @@ def create_bokeh_plot(data, station_name):
 def configure_plot(fig):
     """Configure plot appearance and settings."""
     fig.left[0].formatter.use_scientific = False
-    fig.extra_y_ranges = {"temp_range": Range1d(start=-5, end=40)}
+    fig.extra_y_ranges = {
+        "temp_range": Range1d(start=-5, end=40),
+        "hum_range": Range1d(start=0, end=100),
+    }
     fig.add_layout(LinearAxis(y_range_name="temp_range", axis_label="Temperatura (°C)"), 'right')
+    fig.add_layout(LinearAxis(y_range_name="hum_range", axis_label="Humedad (%)"), 'right')
 
 def add_plot_elements(fig, data):
     """Add lines, circles, and tooltips to the plot."""
     fig.line(data['fecha'], data['lluvia'], line_color='navy', line_width=1, legend_label='Precipitación', name='lluvia')
     fig.line(data['fecha'], data['tseca'], line_color='seagreen', line_width=1, line_dash='dashed', legend_label='Temperatura media', name='tseca', y_range_name='temp_range')
-    fig.circle(data['fecha'], data['tmin'], fill_color='deepskyblue', line_color='blue', size=3, legend_label='Temperatura min', name='tmin', y_range_name='temp_range')
-    fig.circle(data['fecha'], data['tmax'], fill_color='firebrick', line_color='red', size=3, legend_label='Temperatura max', name='tmax', y_range_name='temp_range')
+    fig.scatter(data['fecha'], data['tmin'], fill_color='deepskyblue', line_color='blue', size=3, legend_label='Temperatura min', name='tmin', y_range_name='temp_range')
+    fig.scatter(data['fecha'], data['tmax'], fill_color='firebrick', line_color='red', size=3, legend_label='Temperatura max', name='tmax', y_range_name='temp_range')
+    fig.line(data['fecha'], data['hum_rel'], line_color='darkorange', line_width=1, line_dash='dotted', legend_label='Humedad relativa', name='hum_rel', y_range_name='hum_range')
 
     fig.legend.location = 'top_left'
     fig.title.text_font_size = '10pt'
@@ -142,6 +149,7 @@ def extract_plotting_data(data, station_name, directory_img):
         'tmin': data['tmin'],
         'tseca': data['tseca'],
         'tmax': data['tmax'],
+        'hum_rel': data['hum_rel'],
         'estacion': station_name,
         'directory_img': directory_img
     }
