@@ -1,5 +1,10 @@
 # Generated application output — never commit
 main_folder/
+graficas_*/
+
+# Downloaded / auto-generated data files
+data/insivumeh_*.csv
+data/_download_temp.csv
 
 # PyInstaller build artefacts
 build/

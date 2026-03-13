@@ -80,7 +80,7 @@ python montly_graph.py
 ## Architecture Overview
 
 ```
-montly_graph.py              ← Entry point, folder init
+montly_graph.py              ← Entry point
         ↓
      gui.py                  ← PyQt6 main window, orchestrates all steps
      ├── download_database.py     ← HTTP download of CSV from Google Drive (no auth)
@@ -91,7 +91,7 @@ montly_graph.py              ← Entry point, folder init
 
 **Key design decisions:**
 
-- Slow operations (graph generation) run on a background `QThread` — GUI stays responsive.
+- All slow operations (download, graph generation, map generation) run on background `QThread` subclasses (`DownloadWorker`, `GraphWorker`, `MapWorker`) — GUI stays responsive.
 - Bokeh produces self-contained interactive HTML per station. Matplotlib produces static PNG per station.
 - `map_viewer.py` produces a single `mapa_{YYYYMMDD}_{YYYYMM}.html` covering all stations simultaneously, opened in the system browser.
 - Google Drive access is read-only (public download, no auth). The manual CSV upload feature was removed — see `archive/upload_database.py`.
@@ -152,9 +152,11 @@ graph_generator_monthly/
 
 | Path | Contents |
 | --- | --- |
-| `<output_dir>/html_output/` | Bokeh HTML file per station |
-| `<output_dir>/img_output/` | Matplotlib PNG file per station |
+| `<output_dir>/graficas_{YYYYMMDD}_{YYYYMM}_a_{YYYYMM}/html_output/` | Bokeh HTML file per station |
+| `<output_dir>/graficas_{YYYYMMDD}_{YYYYMM}_a_{YYYYMM}/img_output/` | Matplotlib PNG file per station |
 | `<output_dir>/mapa_{YYYYMMDD}_{YYYYMM}.html` | Single Folium network map (all stations) |
+
+Each graph generation run creates a new uniquely named `graficas_*` folder — re-running never overwrites previous output.
 
 ---
 
@@ -190,10 +192,12 @@ graph_generator_monthly/
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | `WeatherGraphsApp` | `QWidget` | Main window; 6-step workflow, progress bar, status label |
+| `DownloadWorker` | `QThread` | Background thread for CSV download; emits `finished_signal(path, msg)` or `error_signal(msg)` |
 | `GraphWorker` | `QThread` | Background thread for graph generation; forwards `progress_signal`, `plot_data_signal`, `finished_signal` from `GraphGenerator` |
+| `MapWorker` | `QThread` | Background thread for map generation; emits `finished_signal(map_path, msg)` or `error_signal(msg)` |
 | `LoadingDialog` | `QDialog` | Frameless modal dialog showing `spinning-loading.gif` |
 | `resource_path(relative_path)` | function | Resolves asset paths for both dev (`__file__`) and PyInstaller (`_MEIPASS`) bundle contexts |
-| `open_map_in_browser(map_path)` | function | Opens the map HTML file in the system default browser via `webbrowser.open()` |
+| `open_map_in_browser(map_path)` | function | Opens a `mapa_*.html` file in the system default browser via `webbrowser.open()` |
 
 **Six workflow steps exposed by the GUI:**
 
@@ -229,7 +233,7 @@ graph_generator_monthly/
 | Function | Signature | Description |
 | -------- | --------- | ----------- |
 | `detect_date_format` | `(sample: str) → str` | Returns `'%Y-%m-%d'` or `'%d/%m/%Y'` by inspecting a single `fecha` sample string; shared canonical implementation used by `data_processing`, `map_viewer`, and `gui` |
-| `read_and_prepare_data` | `(csv_path) → DataFrame` | Reads CSV; parses `fecha` with format `%Y/%m/%d` |
+| `read_and_prepare_data` | `(csv_path) → DataFrame` | Reads CSV; parses `fecha` using `detect_date_format()` — supports `%Y-%m-%d` and `%d/%m/%Y` |
 | `prepare_data_for_graphs` | `(df) → DataFrameGroupBy` | Groups entire DataFrame by `Nombre` |
 | `process_grouped_data` | `(name, group, dir_img, dir_html) → dict` | Per-station: filters 30 days, creates and saves Bokeh plot, returns plotting dict |
 | `create_bokeh_plot` | `(data, station_name) → Figure` | Builds dual-axis Bokeh figure (800×400 px) |

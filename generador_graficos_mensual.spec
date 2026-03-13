@@ -1,12 +1,21 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-
 a = Analysis(
-    ['dataset_modified_multythread.py'],
+    ['montly_graph.py'],
     pathex=[],
     binaries=[],
-    datas=[('images\\logo_insivumeh.png', 'images\\logo_insivumeh.png'), ('images\\waterco-logo.png', 'images\\waterco-logo.png'), ('images\\IUCN_logo.png', 'images\\IUCN_logo.png')],
-    hiddenimports=[],
+    datas=[
+        ('assets\\logo_insivumeh.png',   'assets'),
+        ('assets\\waterco-logo.png',     'assets'),
+        ('assets\\IUCN_logo.png',        'assets'),
+        ('assets\\spinning-loading.gif', 'assets'),
+    ],
+    hiddenimports=[
+        'data_processing',
+        'graph_generation',
+        'map_viewer',
+        'download_database',
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -34,4 +43,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='assets\\logo_insivumeh.png',
 )

@@ -54,8 +54,15 @@ for fname in ["logo_insivumeh.png", "waterco-logo.png", "IUCN_logo.png", "spinni
 
 # ── 2. Data CSV ────────────────────────────────────────────────────────────────
 log("\n[2] Data CSV path (data/)")
-csv_path = os.path.join(ROOT, "data", "download-database.csv")
-check("data/download-database.csv exists", os.path.isfile(csv_path))
+import glob as _glob
+_dated = _glob.glob(os.path.join(ROOT, "data", "insivumeh_*.csv"))
+_legacy = os.path.join(ROOT, "data", "download-database.csv")
+csv_path = _dated[0] if _dated else _legacy
+check(
+    "data/ contains insivumeh_*.csv or download-database.csv",
+    bool(_dated) or os.path.isfile(_legacy),
+    f"using: {os.path.basename(csv_path)}",
+)
 
 # ── 3. Date auto-detection ─────────────────────────────────────────────────────
 log("\n[3] Date format auto-detection")
