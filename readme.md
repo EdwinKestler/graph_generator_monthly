@@ -86,16 +86,15 @@ montly_graph.py              ← Entry point, folder init
      ├── download_database.py     ← HTTP download of CSV from Google Drive (no auth)
      ├── data_processing.py       ← pandas + Bokeh: CSV → per-station HTML charts
      ├── graph_generation.py      ← matplotlib: CSV → per-station PNG images (QThread)
-     ├── map_viewer.py            ← folium: CSV → full-network interactive mapa_*.html
-     └── upload_database.py       ← Google Drive API v3: upload CSV (service account)
+     └── map_viewer.py            ← folium: CSV → full-network interactive mapa_*.html
 ```
 
 **Key design decisions:**
 
-- Slow operations (graph generation, file upload) run on background `QThread`s — GUI stays responsive.
+- Slow operations (graph generation) run on a background `QThread` — GUI stays responsive.
 - Bokeh produces self-contained interactive HTML per station. Matplotlib produces static PNG per station.
 - `map_viewer.py` produces a single `mapa_{YYYYMMDD}_{YYYYMM}.html` covering all stations simultaneously, opened in the system browser.
-- Google Drive download is public (no auth). Upload requires a user-supplied service account JSON key.
+- Google Drive access is read-only (public download, no auth). The manual CSV upload feature was removed — see `archive/upload_database.py`.
 
 ---
 
@@ -104,12 +103,11 @@ montly_graph.py              ← Entry point, folder init
 ```
 graph_generator_monthly/
 ├── montly_graph.py              Entry point & folder initialisation
-├── gui.py                       PyQt6 main application window (8 workflow steps)
+├── gui.py                       PyQt6 main application window (6 workflow steps)
 ├── data_processing.py           Data preparation + Bokeh HTML generation
 ├── graph_generation.py          Matplotlib PNG generation (runs via QThread)
 ├── map_viewer.py                Folium station-network map generation
 ├── download_database.py         Google Drive public-file downloader
-├── upload_database.py           Google Drive service-account uploader
 │
 ├── data/                        CSV data directory
 │   ├── insivumeh_YYYYMMDD_YYYYMM_a_YYYYMM.csv   Primary working file — downloaded from Google Drive
@@ -130,7 +128,8 @@ graph_generator_monthly/
 │   ├── dataset2_modified.py     Early threading attempt
 │   ├── downloadwithlink.py      Google Drive download prototype
 │   ├── spinner_test_code_min.py Loading spinner UI test
-│   └── testinplot.py            Bokeh + matplotlib plotting tests
+│   ├── testinplot.py            Bokeh + matplotlib plotting tests
+│   └── upload_database.py       Google Drive service-account uploader (archived — replaced by IoT ingestion)
 │
 ├── dev/                         Development and testing scripts (not used in production)
 │   ├── test_suite.py            Full test suite (14 checks) — run via conda
@@ -179,7 +178,7 @@ graph_generator_monthly/
 
 ### `gui.py` — Main Application Window
 
-**Purpose:** PyQt6 GUI with eight workflow steps. Coordinates all other modules. All user interaction passes through this file.
+**Purpose:** PyQt6 GUI with six workflow steps. Coordinates all other modules. All user interaction passes through this file.
 
 | | |
 | --- | --- |
@@ -190,14 +189,13 @@ graph_generator_monthly/
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| `WeatherGraphsApp` | `QWidget` | Main window; 8-step workflow, progress bar, status label |
-| `Worker` | `QThread` | Background thread for Google Drive upload (prevents GUI freeze) |
+| `WeatherGraphsApp` | `QWidget` | Main window; 6-step workflow, progress bar, status label |
 | `GraphWorker` | `QThread` | Background thread for graph generation; forwards `progress_signal`, `plot_data_signal`, `finished_signal` from `GraphGenerator` |
 | `LoadingDialog` | `QDialog` | Frameless modal dialog showing `spinning-loading.gif` |
 | `resource_path(relative_path)` | function | Resolves asset paths for both dev (`__file__`) and PyInstaller (`_MEIPASS`) bundle contexts |
 | `open_map_in_browser(map_path)` | function | Opens the map HTML file in the system default browser via `webbrowser.open()` |
 
-**Eight workflow steps exposed by the GUI:**
+**Six workflow steps exposed by the GUI:**
 
 | Step | Button label (ES) | Module called | Output |
 | ---- | ----------------- | ------------- | ------ |
@@ -207,8 +205,6 @@ graph_generator_monthly/
 | 4 | Generar Graficos mensuales | `graph_generation.py` + `data_processing.py` | HTML + PNG per station |
 | 4b | Generar Mapa de Estaciones | `map_viewer.py` | `<output_dir>/mapa_{YYYYMMDD}_{YYYYMM}.html` opened in browser |
 | 5 | Explorar graficas generadas | `os.startfile()` | Opens output directory in Explorer |
-| 6 | Seleccionar Archivo de autenticación de cuenta | — (file dialog) | Stores service account JSON path |
-| 7 | Enviar base de datos .csv a INSIVUMEH | `upload_database.py` | CSV uploaded to Google Drive |
 
 **Hard-coded values in `gui.py`:**
 
@@ -216,6 +212,8 @@ graph_generator_monthly/
 | ----- | ------- |
 | `19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y` | Google Drive file ID to download (Step 1) |
 | `data/insivumeh_{YYYYMMDD}_{YYYYMM}_a_{YYYYMM}.csv` | Auto-generated local destination after download (date-stamped) |
+
+> The upload folder ID (`1YufGqLGRrqpWRyGI_Ltv3pHNyu4MVHRM`) was previously hard-coded here. It has been removed along with the upload feature.
 
 ---
 
@@ -431,27 +429,14 @@ Each CircleMarker has a hover tooltip (station name + value) and a click popup (
 
 ---
 
-### `upload_database.py` — Google Drive Uploader
+### `upload_database.py` — Google Drive Uploader *(archived)*
 
-**Purpose:** Authenticates with a Google service account and uploads a CSV file to a designated shared folder.
+> **This module has been moved to `archive/upload_database.py` and is no longer part of the active application.**
+> The manual CSV upload feature was a prototype that required users to supply a service account JSON key. It was removed in favour of an IoT-based data ingestion solution that provides better data integrity: no human file-selection, schema validation at ingestion, and no credential distribution to field users.
 
-| | |
-| --- | --- |
-| **Inputs** | `file_path` (local CSV to upload), `service_account_file` (path to `.json` credentials) |
-| **Outputs** | File created in Google Drive |
-| **Returns** | `file_id` string of the newly created Drive file |
+~~**Purpose:** Authenticates with a Google service account and uploads a CSV file to a designated shared folder.~~
 
-| Function | Signature | Description |
-| -------- | --------- | ----------- |
-| `upload_to_drive` | `(file_path, service_account_file) → str` | Authenticates with service account, names file `{MONTH}_{YEAR}_{original_filename}`, uploads to parent folder, returns new file ID |
-
-**Hard-coded values in `upload_database.py`:**
-
-| Value | Description |
-| ----- | ----------- |
-| `https://www.googleapis.com/auth/drive` | OAuth2 scope |
-| `1YufGqLGRrqpWRyGI_Ltv3pHNyu4MVHRM` | Google Drive parent folder ID for uploads |
-| Google Drive API v3 | API version used |
+For reference, the module accepted `file_path` (local CSV) and `service_account_file` (path to `.json` credentials), uploaded to parent folder `1YufGqLGRrqpWRyGI_Ltv3pHNyu4MVHRM` using Google Drive API v3, and returned the new `file_id`.
 
 ---
 
@@ -548,7 +533,9 @@ Small sample files (112 and 180 rows respectively) with the same schema as `data
 | Local destination | `data/insivumeh_{YYYYMMDD}_{YYYYMM}_a_{YYYYMM}.csv` (auto-named after download) |
 | Implementation | `download_database.py` — chunked streaming, 32 KB per chunk |
 
-### 2. Google Drive — Authenticated File Upload
+### 2. Google Drive — Authenticated File Upload *(removed)*
+
+> **This service is no longer used by the application.** The manual CSV upload feature (GUI Steps 6 and 7) was removed in favour of an IoT-based data ingestion solution. The implementation has been moved to `archive/upload_database.py` for reference.
 
 | Attribute | Value |
 | --- | --- |
@@ -559,9 +546,9 @@ Small sample files (112 and 180 rows respectively) with the same schema as `data
 | OAuth scope | `https://www.googleapis.com/auth/drive` |
 | Target folder ID | `1YufGqLGRrqpWRyGI_Ltv3pHNyu4MVHRM` |
 | Upload filename | `{MONTH}_{YEAR}_{original_filename}` |
-| Triggered by | GUI Step 7 (runs in `Worker` QThread) |
-| Credential file | Selected by user in GUI Step 6 (`*.json`) |
-| Implementation | `upload_database.py` — `google-api-python-client` Drive v3 |
+| Triggered by | GUI Step 7 — **removed** |
+| Credential file | Selected by user in GUI Step 6 — **removed** |
+| Implementation | `archive/upload_database.py` — `google-api-python-client` Drive v3 |
 
 ### 3. Esri tile servers — Map basemaps (read-only, no auth)
 
@@ -584,7 +571,6 @@ OpenStreetMap tiles are also used and are the default basemap.
 | ----- | ------------------- | ------ | ----------- |
 | Meteorological CSV | Google Drive (Step 1) or local file dialog (Step 3) | CSV | `data_processing.py`, `graph_generation.py`, `map_viewer.py` |
 | Output directory | User via file dialog (Step 2) | Folder path | `graph_generation.py`, `map_viewer.py` |
-| Service account credentials | User via file dialog (Step 6) | JSON | `upload_database.py` |
 | UI image assets | `assets/` folder (bundled) | PNG, GIF | `gui.py` |
 
 ### Outputs
@@ -594,7 +580,6 @@ OpenStreetMap tiles are also used and are the default basemap.
 | Per-station interactive charts | `<output_dir>/html_output/{station}_{MM-YYYY}.html` | Bokeh HTML | ~50–200 KB each | `data_processing.py` |
 | Per-station static images | `<output_dir>/img_output/{station}.png` | PNG (10×5 in) | ~80–200 KB each | `graph_generation.py` |
 | Network map | `<output_dir>/mapa_{YYYYMMDD}_{YYYYMM}.html` | Folium/Leaflet HTML | ~650 KB | `map_viewer.py` |
-| Uploaded CSV on Google Drive | Folder `1YufGqLGRrqpWRyGI_Ltv3pHNyu4MVHRM` | CSV | same as input | `upload_database.py` |
 
 ---
 
@@ -605,7 +590,6 @@ All configurable values are embedded directly in source code. There are no `.env
 | Parameter | File | Value | How to change |
 | --- | --- | --- | --- |
 | Download file ID | `gui.py` line ~152 | `19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y` | Edit the string literal |
-| Upload parent folder ID | `upload_database.py` | `1YufGqLGRrqpWRyGI_Ltv3pHNyu4MVHRM` | Edit the string literal |
 | Date window | `data_processing.py`, `map_viewer.py` | Last 30 days from dataset max date | Change `pd.Timedelta(days=30)` |
 | Bokeh precipitation Y range | `data_processing.py` | −5 to 90 mm | Edit `y_range=(-5, 90)` |
 | Bokeh temperature Y range | `data_processing.py` | −5 to 40 °C | Edit `Range1d(start=-5, end=40)` |
@@ -636,16 +620,12 @@ Main Thread (Qt Event Loop)
 │       ├── Emits plot_data_signal(dict)       → plot_with_matplotlib() on main thread
 │       └── Emits completion_signal(str)       → status label update
 │
-├── Step 4b – Generate map (main thread, spinner shown)
-│   └── build_station_summary() + generate_map()   [synchronous, ~1–3 s]
-│   └── open_map_in_browser()                       [non-blocking]
-│
-└── Step 7 – Upload (QThread via Worker)
-    └── Worker.run() → upload_to_drive()
-        └── Emits finished_signal(str)   → upload status label update
+└── Step 4b – Generate map (main thread, spinner shown)
+    └── build_station_summary() + generate_map()   [synchronous, ~1–3 s]
+    └── open_map_in_browser()                       [non-blocking]
 ```
 
-**Note:** Graph generation and file upload are the only operations that run on background threads. The download (Step 1) and map generation (Step 4b) run synchronously on the main thread but are fast enough (~1–3 s) that the `LoadingDialog` spinner covers the brief freeze.
+**Note:** Graph generation is the only operation that runs on a background thread. The download (Step 1) and map generation (Step 4b) run synchronously on the main thread but are fast enough (~1–3 s) that the `LoadingDialog` spinner covers the brief freeze.
 
 ---
 
@@ -700,19 +680,6 @@ Main Thread (Qt Event Loop)
 7. STEP 5 – Explore generated graphs
    GUI → os.startfile(output_dir)   [Windows only, falls back on other OS]
    Opens output folder in Windows Explorer showing html_output/, img_output/
-
-8. STEP 6 – Select service account credentials
-   GUI → QFileDialog.getOpenFileName(*.json)
-   → stores path in self.service_account_file
-
-9. STEP 7 – Upload CSV to Google Drive
-   GUI → Worker(task='upload').start()
-     └─ upload_to_drive(file_path, service_account_file)
-        → auth with service account
-        → create file: {MONTH}_{YEAR}_{original_name}
-        → upload to folder 1YufGqLGRrqpWRyGI_Ltv3pHNyu4MVHRM
-        → return file ID
-   Status label updated with success/error message
 ```
 
 ---
@@ -760,10 +727,6 @@ flowchart TD
         BROWSER["System default browser\n(webbrowser.open)"]
     end
 
-    subgraph CLOUD_OUT["☁️  Google Drive — Authenticated (write)"]
-        GD_AUTH["Service-account upload\nParent folder: 1YufGqLGRrqpWRyGI_Ltv3pHNyu4MVHRM\nFilename: {MONTH}_{YEAR}_{original_filename}"]
-    end
-
     GD_PUB -->|"Button 1\nHTTP download"| DL
     DL --> CSV
     CSV --> GUI
@@ -775,8 +738,9 @@ flowchart TD
     GG --> PNG_OUT
     MV --> MAP_OUT
     MAP_OUT --> BROWSER
-    GUI -->|"Button 7\nupload_to_drive()\nWorker QThread"| GD_AUTH
 ```
+
+> The authenticated Google Drive upload path (previously shown as `CLOUD_OUT`) has been removed. The application is now read-only with respect to Google Drive.
 
 ### Low-level transfer details
 
@@ -813,15 +777,9 @@ data_processing  graph_generation               map_viewer
                                                       │
                                                       ▼
                                            system default browser
-
-      │   (user provides CSV + service-account .json)
-      ▼
-╔══════════════════════════════════════════════════════════════════════╗
-║  GOOGLE DRIVE (Authenticated — service account)                      ║
-║  Parent folder: 1YufGqLGRrqpWRyGI_Ltv3pHNyu4MVHRM                   ║
-║  Upload name:   {MONTH}_{YEAR}_{original_filename}                   ║
-╚══════════════════════════════════════════════════════════════════════╝
 ```
+
+> The authenticated Google Drive upload path that previously appeared here has been removed. The application is now read-only with respect to Google Drive.
 
 ---
 
@@ -978,7 +936,7 @@ Actual versions confirmed working in the `graph_generator` conda environment:
 
 **Google Drive IDs:**
 
-- The download file ID in `gui.py` and the upload folder ID in `upload_database.py` are the only values that need to change when deploying to a different Google Drive environment.
+- The download file ID in `gui.py` is the only value that needs to change when deploying to a different Google Drive environment. The upload folder ID (`1YufGqLGRrqpWRyGI_Ltv3pHNyu4MVHRM`) is no longer used — it remains only in `archive/upload_database.py` for reference.
 
 **Map viewer — internet required:**
 
