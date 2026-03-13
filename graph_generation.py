@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import date
 import pandas as pd
 import matplotlib.pyplot as plt
 from PyQt6.QtCore import QObject, pyqtSignal
@@ -14,9 +15,14 @@ class GraphGenerator(QObject):
         try:
             df = read_and_prepare_data(csv_file_path)
             grouped_data = prepare_data_for_graphs(df)
-            
-            directory_img = os.path.join(output_directory, "img_output")
-            directory_html = os.path.join(output_directory, "html_output")
+
+            run_date   = date.today().strftime('%Y%m%d')
+            data_start = df['fecha'].min().strftime('%Y%m')
+            data_end   = df['fecha'].max().strftime('%Y%m')
+            run_folder = f"graficas_{run_date}_{data_start}_a_{data_end}"
+
+            directory_img  = os.path.join(output_directory, run_folder, "img_output")
+            directory_html = os.path.join(output_directory, run_folder, "html_output")
             os.makedirs(directory_img, exist_ok=True)
             os.makedirs(directory_html, exist_ok=True)
 
@@ -25,9 +31,9 @@ class GraphGenerator(QObject):
                 plot_data = process_grouped_data(name, group, directory_img, directory_html)
                 self.plot_data_signal.emit(plot_data)
                 progress = int((i + 1) / total * 100)
-                self.progress_signal.emit(progress)  # Update progress
+                self.progress_signal.emit(progress)
 
-            self.completion_signal.emit("Gráficos generados exitosamente!")
+            self.completion_signal.emit(f"Gráficos generados exitosamente! → {run_folder}")
 
         except Exception as e:
             self.completion_signal.emit(f"Error: {str(e)}")

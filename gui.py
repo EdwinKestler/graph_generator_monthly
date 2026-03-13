@@ -15,13 +15,19 @@ from upload_database import upload_to_drive
 from map_viewer import build_station_summary, generate_map
 
 
+def resource_path(relative_path):
+    """Resolve asset paths for both dev and PyInstaller bundle contexts."""
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
+
+
 class LoadingDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setModal(True)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
 
-        self.loading_movie = QMovie("assets\\spinning-loading.gif")
+        self.loading_movie = QMovie(resource_path("assets/spinning-loading.gif"))
         self.loading_label = QLabel(self)
         self.loading_label.setMovie(self.loading_movie)
         self.loading_movie.start()
@@ -87,9 +93,9 @@ class WeatherGraphsApp(QWidget):
         main_layout = QVBoxLayout()
 
         logo_layout = QHBoxLayout()
-        self.setup_logo(logo_layout, "assets\\logo_insivumeh.png")
-        self.setup_logo(logo_layout, "assets\\waterco-logo.png")
-        self.setup_logo(logo_layout, "assets\\IUCN_logo.png")
+        self.setup_logo(logo_layout, resource_path("assets/logo_insivumeh.png"))
+        self.setup_logo(logo_layout, resource_path("assets/waterco-logo.png"))
+        self.setup_logo(logo_layout, resource_path("assets/IUCN_logo.png"))
         main_layout.addLayout(logo_layout)
 
         self.download_button = QPushButton("1. Bajar base de datos Mensual .CSV de INSIVUMEH")
