@@ -1,3 +1,4 @@
+import logging
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -34,40 +35,53 @@ class GraphGenerator(QObject):
 def plot_with_matplotlib(data):
     """
     Plot the data using matplotlib and save the figures.
+    Three axes: precipitation (left), temperature (right), humidity (far right).
     """
-    fecha = data['fecha']
-    lluvia = data['lluvia']
-    tmin = data['tmin']
-    tseca = data['tseca']
-    tmax = data['tmax']
-    estacion = data['estacion']
-    directory_img = data['directory_img']
+    try:
+        fecha = data['fecha']
+        lluvia = data['lluvia']
+        tmin = data['tmin']
+        tseca = data['tseca']
+        tmax = data['tmax']
+        hum_rel = data['hum_rel']
+        estacion = data['estacion']
+        directory_img = data['directory_img']
 
-    fig, ax1 = plt.subplots(figsize=(10, 5))
+        fig, ax1 = plt.subplots(figsize=(12, 5))
 
-    ax1.set_xlabel('Fecha')
-    ax1.set_ylabel('Precipitación (mm)', color='tab:blue')
-    ax1.plot(fecha, lluvia, color='tab:blue', label='Precipitación')
-    ax1.tick_params(axis='y', labelcolor='tab:blue')
-    ax1.set_ylim(-5, 90)
+        ax1.set_xlabel('Fecha')
+        ax1.set_ylabel('Precipitación (mm)', color='tab:blue')
+        ax1.plot(fecha, lluvia, color='tab:blue', label='Precipitación')
+        ax1.tick_params(axis='y', labelcolor='tab:blue')
+        ax1.set_ylim(-5, 90)
 
-    ax2 = ax1.twinx()
-    ax2.set_ylabel('Temperatura (°C)', color='tab:red')
-    ax2.plot(fecha, tseca, color='tab:green', label='Temperatura Seca')
-    ax2.plot(fecha, tmin, color='deepskyblue', linestyle='--', label='Temp Min')
-    ax2.plot(fecha, tmax, color='firebrick', linestyle='--', label='Temp Max')
-    ax2.tick_params(axis='y', labelcolor='tab:red')
+        ax2 = ax1.twinx()
+        ax2.set_ylabel('Temperatura (°C)', color='tab:red')
+        ax2.plot(fecha, tseca, color='tab:green', label='Temperatura Seca')
+        ax2.plot(fecha, tmin, color='deepskyblue', linestyle='--', label='Temp Min')
+        ax2.plot(fecha, tmax, color='firebrick', linestyle='--', label='Temp Max')
+        ax2.tick_params(axis='y', labelcolor='tab:red')
+        ax2.set_ylim(-5, 40)
 
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax2.legend(lines1 + lines2, labels1 + labels2, loc=0)
-    ax2.set_ylim(-5, 40)
+        ax3 = ax1.twinx()
+        ax3.spines['right'].set_position(('outward', 60))
+        ax3.set_ylabel('Humedad relativa (%)', color='darkorange')
+        ax3.plot(fecha, hum_rel, color='darkorange', linestyle=':', label='Humedad relativa')
+        ax3.tick_params(axis='y', labelcolor='darkorange')
+        ax3.set_ylim(0, 100)
 
-    plt.title(f"Data for {estacion}")
-    fig.tight_layout()
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        lines3, labels3 = ax3.get_legend_handles_labels()
+        ax2.legend(lines1 + lines2 + lines3, labels1 + labels2 + labels3, loc=0)
 
-    save_path = os.path.join(directory_img, f"{estacion}.png")
-    plt.savefig(save_path)
-    plt.close(fig)
-    
-    
+        plt.title(f"Datos de {estacion}")
+        fig.tight_layout()
+
+        save_path = os.path.join(directory_img, f"{estacion}.png")
+        plt.savefig(save_path)
+        plt.close(fig)
+
+    except Exception as e:
+        plt.close('all')
+        logging.warning(f"plot_with_matplotlib failed for '{data.get('estacion', '?')}': {e}")

@@ -40,14 +40,14 @@ class Worker(QThread):
     progress_signal = pyqtSignal(int)
     plot_data_signal = pyqtSignal(object)
     finished_signal = pyqtSignal(str)
-    
+
     def __init__(self, file_path=None, task=None, service_account_file=None):
         super().__init__()  # Corrected
         self.file_path = file_path
         self.task = task
         self.service_account_file = service_account_file
-    
-    
+
+
     def run(self):
         if self.task == 'upload':
             try:
@@ -55,6 +55,24 @@ class Worker(QThread):
                 self.finished_signal.emit(message)
             except Exception as e:
                 self.finished_signal.emit(f"Error al subir archivo: {e}")
+
+
+class GraphWorker(QThread):
+    progress_signal = pyqtSignal(int)
+    plot_data_signal = pyqtSignal(object)
+    finished_signal = pyqtSignal(str)
+
+    def __init__(self, output_directory, csv_file_path):
+        super().__init__()
+        self.output_directory = output_directory
+        self.csv_file_path = csv_file_path
+
+    def run(self):
+        generator = GraphGenerator()
+        generator.progress_signal.connect(self.progress_signal)
+        generator.plot_data_signal.connect(self.plot_data_signal)
+        generator.completion_signal.connect(self.finished_signal)
+        generator.generate_graphs(self.output_directory, self.csv_file_path)
                   
 
 class WeatherGraphsApp(QWidget):
@@ -256,12 +274,11 @@ class WeatherGraphsApp(QWidget):
         self.status_label.setText("Procesando datos... porfavor espere.")
         self.show_loading()
 
-        self.graph_generator = GraphGenerator()
-        self.graph_generator.progress_signal.connect(self.update_progress)
-        self.graph_generator.plot_data_signal.connect(plot_with_matplotlib)
-        self.graph_generator.completion_signal.connect(lambda message: self.status_label.setText(message))
-
-        self.graph_generator.generate_graphs(output_directory, csv_file_path)
+        self.graph_worker = GraphWorker(output_directory, csv_file_path)
+        self.graph_worker.progress_signal.connect(self.update_progress)
+        self.graph_worker.plot_data_signal.connect(plot_with_matplotlib)
+        self.graph_worker.finished_signal.connect(self.on_graphs_complete)
+        self.graph_worker.start()
 
     def generate_map_wrapper(self):
         csv_file_path = self.csv_edit.text()
@@ -292,9 +309,11 @@ class WeatherGraphsApp(QWidget):
     def update_progress(self, value):
         self.progress.setValue(value)
 
-    def graphs_generated(self):
-        self.status_label.setText("Graficos generados exitosamente!")
-        self.explore_button.setEnabled(True)
+    def on_graphs_complete(self, message):
+        self.hide_loading()
+        self.status_label.setText(message)
+        if not message.startswith("Error"):
+            self.explore_button.setEnabled(True)
     
     def browse_service_account_file(self):
         file_filter = "JSON Files (*.json);;All Files (*)"
