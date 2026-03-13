@@ -9,7 +9,7 @@ def verify_and_create_folders():
     Verify and create folders if they don't exist.
     """
     main_folder = 'main_folder'
-    subfolders = ['datos-csv', 'output-folder', 'images']
+    subfolders = ['data', 'output-folder', 'assets']
 
     # Create the main folder if it doesn't exist
     if not os.path.exists(main_folder):

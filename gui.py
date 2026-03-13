@@ -5,11 +5,13 @@ from PyQt6.QtWidgets import (
     QApplication, QLabel, QVBoxLayout, QWidget, QPushButton, QFileDialog,
     QLineEdit, QProgressBar, QDialog, QMessageBox, QHBoxLayout
 )
+import webbrowser
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from PyQt6.QtGui import QPixmap, QMovie
 from download_database import download_file_from_google_drive
 from graph_generation import GraphGenerator, plot_with_matplotlib
 from upload_database import upload_to_drive
+from map_viewer import build_station_summary, generate_map
 
 
 class LoadingDialog(QDialog):
@@ -18,7 +20,7 @@ class LoadingDialog(QDialog):
         self.setModal(True)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
 
-        self.loading_movie = QMovie("images\\spinning-loading.gif")
+        self.loading_movie = QMovie("assets\\spinning-loading.gif")
         self.loading_label = QLabel(self)
         self.loading_label.setMovie(self.loading_movie)
         self.loading_movie.start()
@@ -26,6 +28,11 @@ class LoadingDialog(QDialog):
         self.layout = QVBoxLayout()
         self.layout.addWidget(self.loading_label)
         self.setLayout(self.layout)
+
+
+def open_map_in_browser(map_path: str) -> None:
+    """Open map.html in the system default browser."""
+    webbrowser.open(f"file:///{map_path.replace(os.sep, '/')}")
 
 
 class Worker(QThread):
@@ -61,9 +68,9 @@ class WeatherGraphsApp(QWidget):
         main_layout = QVBoxLayout()
 
         logo_layout = QHBoxLayout()
-        self.setup_logo(logo_layout, "images\\logo_insivumeh.png")
-        self.setup_logo(logo_layout, "images\\waterco-logo.png")
-        self.setup_logo(logo_layout, "images\\IUCN_logo.png")
+        self.setup_logo(logo_layout, "assets\\logo_insivumeh.png")
+        self.setup_logo(logo_layout, "assets\\waterco-logo.png")
+        self.setup_logo(logo_layout, "assets\\IUCN_logo.png")
         main_layout.addLayout(logo_layout)
 
         self.download_button = QPushButton("1. Bajar base de datos Mensual .CSV de INSIVUMEH")
@@ -93,8 +100,11 @@ class WeatherGraphsApp(QWidget):
         self.generate_button = QPushButton("4. Generar Graficos mensuales")
         self.generate_button.clicked.connect(self.generate_graphs_wrapper)
         main_layout.addWidget(self.generate_button)
-        
-        
+
+        self.map_button = QPushButton("4b. Generar Mapa de Estaciones")
+        self.map_button.clicked.connect(self.generate_map_wrapper)
+        main_layout.addWidget(self.map_button)
+
         self.explore_button = QPushButton("5. Explorar graficas generadas")
         self.explore_button.setEnabled(False)
         self.explore_button.clicked.connect(self.open_output_directory)
@@ -149,7 +159,7 @@ class WeatherGraphsApp(QWidget):
         try:
             self.show_loading()  # Show loading spinner
             file_id = '19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y'
-            destination = 'datos-csv\\download-database.csv'
+            destination = 'data\\download-database.csv'
             
             # Check if the directory exists and create if not
             os.makedirs(os.path.dirname(destination), exist_ok=True)
@@ -225,6 +235,32 @@ class WeatherGraphsApp(QWidget):
         self.graph_generator.completion_signal.connect(lambda message: self.status_label.setText(message))
 
         self.graph_generator.generate_graphs(output_directory, csv_file_path)
+
+    def generate_map_wrapper(self):
+        csv_file_path = self.csv_edit.text()
+        output_directory = self.directory_edit.text()
+
+        if not csv_file_path or not output_directory:
+            self.status_label.setText(
+                "Por favor seleccione el CSV y el directorio de salida antes de generar el mapa."
+            )
+            return
+
+        self.status_label.setText("Generando mapa de estaciones...")
+        self.show_loading()
+
+        try:
+            summary = build_station_summary(csv_file_path)
+            map_path = generate_map(summary, output_directory)
+            self.hide_loading()
+            self.status_label.setText(
+                f"Mapa generado: {len(summary)} estaciones — {map_path}"
+            )
+            open_map_in_browser(map_path)
+        except Exception as e:
+            self.hide_loading()
+            QMessageBox.critical(self, "Error al generar mapa", str(e))
+            self.status_label.setText("Error al generar el mapa.")
 
     def update_progress(self, value):
         self.progress.setValue(value)

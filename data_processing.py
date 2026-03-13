@@ -3,12 +3,13 @@ from bokeh.plotting import figure, output_file, save
 from bokeh.models import Range1d, LinearAxis, HoverTool
 import os
 
-# Constants
-DATE_FORMAT = "%Y/%m/%d"
-
 def read_and_prepare_data(csv_file_path):
     """
     Read and prepare data from a CSV file.
+
+    Supports both date formats used by INSIVUMEH CSVs:
+      - YYYY-MM-DD  (download-database.csv)
+      - DD/MM/YYYY  (database.csv)
 
     Args:
         csv_file_path (str): Path to the CSV file.
@@ -17,7 +18,9 @@ def read_and_prepare_data(csv_file_path):
         pd.DataFrame: Prepared DataFrame.
     """
     df = pd.read_csv(csv_file_path, header=0, delimiter=',')
-    df['fecha'] = pd.to_datetime(df['fecha'], format=DATE_FORMAT)
+    sample = str(df['fecha'].dropna().iloc[0]).strip()
+    date_format = "%Y-%m-%d" if len(sample) >= 10 and sample[4] == "-" else "%d/%m/%Y"
+    df['fecha'] = pd.to_datetime(df['fecha'], format=date_format)
     return df
 
 def prepare_data_for_graphs(df):
@@ -46,7 +49,6 @@ def process_grouped_data(name, group, directory_img, directory_html):
         dict: Data for further processing or matplotlib plotting.
     """
     df = group.copy()
-    df['fecha'] = pd.to_datetime(df['fecha'], format=DATE_FORMAT)
     latest_date = df['fecha'].max()
     month_year_str = latest_date.strftime("%m-%Y")
     thirty_days_ago = latest_date - pd.Timedelta(days=30)
@@ -83,8 +85,6 @@ def create_bokeh_plot(data, station_name):
 
 def configure_plot(fig):
     """Configure plot appearance and settings."""
-    fig.yaxis.axis_label_text_font_size = "8pt"
-    fig.title.text_font_size = '8pt'
     fig.left[0].formatter.use_scientific = False
     fig.extra_y_ranges = {"temp_range": Range1d(start=-5, end=40)}
     fig.add_layout(LinearAxis(y_range_name="temp_range", axis_label="Temperatura (°C)"), 'right')
@@ -145,5 +145,3 @@ def extract_plotting_data(data, station_name, directory_img):
         'estacion': station_name,
         'directory_img': directory_img
     }
-    
-    
