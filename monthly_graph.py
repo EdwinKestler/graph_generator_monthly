@@ -5,6 +5,8 @@ matplotlib.use('Agg')   # force non-interactive backend before any pyplot import
 from PyQt6.QtWidgets import QApplication
 from gui import WeatherGraphsApp
 
+__version__ = "1.0.0"
+
 logging.basicConfig(
     filename='graph_generator.log',
     level=logging.WARNING,

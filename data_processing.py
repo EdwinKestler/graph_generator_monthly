@@ -93,21 +93,25 @@ def create_bokeh_plot(data, station_name):
     Returns:
         bokeh.plotting.Figure: Bokeh plot.
     """
+    import numpy as np
+    lluvia_top = max(pd.to_numeric(data['lluvia'], errors='coerce').max() * 1.15, 30)
     fig = figure(
         x_axis_type='datetime', title=station_name, height=400, width=800,
         toolbar_location='below', y_axis_label="Precipitación (mm)",
-        y_range=(-5, 90), background_fill_color='white', background_fill_alpha=0.6,
+        y_range=(-5, float(lluvia_top)), background_fill_color='white', background_fill_alpha=0.6,
         tools="save,pan,box_zoom,reset,wheel_zoom"
     )
-    configure_plot(fig)
+    configure_plot(fig, data)
     add_plot_elements(fig, data)
     return fig
 
-def configure_plot(fig):
+def configure_plot(fig, data):
     """Configure plot appearance and settings."""
+    temp_lo = min(pd.to_numeric(data['tmin'], errors='coerce').min() - 2, -5)
+    temp_hi = max(pd.to_numeric(data['tmax'], errors='coerce').max() + 3, 40)
     fig.left[0].formatter.use_scientific = False
     fig.extra_y_ranges = {
-        "temp_range": Range1d(start=-5, end=40),
+        "temp_range": Range1d(start=float(temp_lo), end=float(temp_hi)),
         "hum_range": Range1d(start=0, end=100),
     }
     fig.add_layout(LinearAxis(y_range_name="temp_range", axis_label="Temperatura (°C)"), 'right')

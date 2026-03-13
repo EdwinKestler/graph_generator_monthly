@@ -143,8 +143,13 @@ graph_generator_monthly/
 │   └── generador_graficos_mensual.exe   Distributable Windows executable (96 MB)
 │
 ├── generador_graficos_mensual.spec   PyInstaller build spec
+├── environment.yml                   Conda environment definition (Python 3.11, conda-forge)
 ├── requirements.txt                  Minimal runtime dependencies (pip-installable)
-└── readme.md                         This file
+├── LICENSE                           MIT License
+├── readme.md                         This file
+└── .github/
+    └── workflows/
+        └── build.yml                 GitHub Actions: build Windows EXE + create release on tag push
 ```
 
 **Runtime-created output directories** (created automatically on first graph generation):
@@ -391,8 +396,8 @@ Example:  mapa_20260313_202603.html
 | `tmin_mean` | float | Mean of `tmin` over last 30 days (°C) |
 | `tmax_mean` | float | Mean of `tmax` over last 30 days (°C) |
 | `hum_rel_mean` | float | Mean of `hum_rel` over last 30 days (%) |
-| `vel_viento_mean` | float | Mean wind speed over last 30 days (km/h) |
-| `dir_viento_mean` | float | Mean wind direction over last 30 days (degrees) |
+| `vel_viento_mean` | float | Mean wind speed over last 30 days (km/h — INSIVUMEH native unit) |
+| `dir_viento_mean` | float | Mean wind direction over last 30 days (degrees true) |
 | `last_fecha` | Timestamp | Most recent observation date for the station |
 | `n_days` | int | Number of daily records in the 30-day window |
 
@@ -486,8 +491,8 @@ Example:  insivumeh_20260313_202304_a_202602.csv
 | `hum_rel` | float | Relative humidity (%) |
 | `bri_solar` | float | Solar brightness (hours) |
 | `nub` | float | Cloud cover (0–8 okta scale) |
-| `vel_viento` | float | Wind speed (km/h) |
-| `dir_viento` | float | Wind direction (degrees, 0–360) |
+| `vel_viento` | float | Wind speed (km/h — as exported by INSIVUMEH; WMO standard is m/s) |
+| `dir_viento` | float | Wind direction (degrees true, 0–360) |
 | `pre_atmos` | float | Atmospheric pressure (mb) |
 | `rad_solar` | float | Solar radiation (W/m²) |
 | `tsuelo_50` | float | Soil temperature at 50 cm depth (°C) |

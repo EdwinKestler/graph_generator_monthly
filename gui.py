@@ -134,7 +134,7 @@ class WeatherGraphsApp(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        self.setWindowTitle("Generador de Graficas Mensual")
+        self.setWindowTitle("Generador de Gráficas Mensual v1.0.0")
         main_layout = QVBoxLayout()
 
         logo_layout = QHBoxLayout()
@@ -163,7 +163,7 @@ class WeatherGraphsApp(QWidget):
         self.csv_edit = QLineEdit()
         main_layout.addWidget(self.csv_edit)
 
-        self.csv_browse_button = QPushButton("3. Selecionar base de datos .csv a graficar")
+        self.csv_browse_button = QPushButton("3. Seleccionar base de datos .csv a graficar")
         self.csv_browse_button.clicked.connect(self.browse_csv)
         main_layout.addWidget(self.csv_browse_button)
 
@@ -277,10 +277,10 @@ class WeatherGraphsApp(QWidget):
         csv_file_path = self.csv_edit.text()
 
         if not (output_directory and csv_file_path):
-            self.status_label.setText("Porfavor provea todos los requisitos para genrar las graficas!")
+            self.status_label.setText("Por favor provea todos los requisitos para generar las gráficas.")
             return
 
-        self.status_label.setText("Procesando datos... porfavor espere.")
+        self.status_label.setText("Procesando datos... por favor espere.")
         self.show_loading()
 
         self.graph_worker = GraphWorker(output_directory, csv_file_path)
