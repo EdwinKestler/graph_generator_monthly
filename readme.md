@@ -7,7 +7,7 @@ A PyQt6 desktop application (Windows) that downloads, processes, and visualises 
 
 - One interactive Bokeh HTML chart per station (last 30 days, precipitation + temperature)
 - One static matplotlib PNG per station
-- One interactive Folium/Leaflet station-network map (`map.html`) opened in the system browser
+- One interactive Folium/Leaflet station-network map (`mapa_{YYYYMMDD}_{YYYYMM}.html`) opened in the system browser
 
 ---
 
@@ -73,7 +73,7 @@ python montly_graph.py
 
 `requirements.txt` reflects the original development environment (NumPy 1.26, pandas 2.1, PyQt6 6.5 via pip). The conda-managed environment uses newer versions (see [Dependencies](#dependencies)) and manages Qt DLLs correctly via conda-forge, avoiding Windows DLL load failures that occur with pip-installed PyQt6.
 
-**`PyQt6-WebEngine` is intentionally excluded** — it has no conda-forge package and causes DLL errors when pip-installed. The map viewer instead opens `map.html` in the system default browser.
+**`PyQt6-WebEngine` is intentionally excluded** — it has no conda-forge package and causes DLL errors when pip-installed. The map viewer instead opens the generated map HTML in the system default browser.
 
 ---
 
@@ -86,7 +86,7 @@ montly_graph.py              ← Entry point, folder init
      ├── download_database.py     ← HTTP download of CSV from Google Drive (no auth)
      ├── data_processing.py       ← pandas + Bokeh: CSV → per-station HTML charts
      ├── graph_generation.py      ← matplotlib: CSV → per-station PNG images (QThread)
-     ├── map_viewer.py            ← folium: CSV → full-network interactive map.html
+     ├── map_viewer.py            ← folium: CSV → full-network interactive mapa_*.html
      └── upload_database.py       ← Google Drive API v3: upload CSV (service account)
 ```
 
@@ -94,7 +94,7 @@ montly_graph.py              ← Entry point, folder init
 
 - Slow operations (graph generation, file upload) run on background `QThread`s — GUI stays responsive.
 - Bokeh produces self-contained interactive HTML per station. Matplotlib produces static PNG per station.
-- `map_viewer.py` produces a single `map.html` covering all stations simultaneously, opened in the system browser.
+- `map_viewer.py` produces a single `mapa_{YYYYMMDD}_{YYYYMM}.html` covering all stations simultaneously, opened in the system browser.
 - Google Drive download is public (no auth). Upload requires a user-supplied service account JSON key.
 
 ---
@@ -155,7 +155,7 @@ graph_generator_monthly/
 | --- | --- |
 | `<output_dir>/html_output/` | Bokeh HTML file per station |
 | `<output_dir>/img_output/` | Matplotlib PNG file per station |
-| `<output_dir>/map.html` | Single Folium network map (all stations) |
+| `<output_dir>/mapa_{YYYYMMDD}_{YYYYMM}.html` | Single Folium network map (all stations) |
 
 ---
 
@@ -195,7 +195,7 @@ graph_generator_monthly/
 | `GraphWorker` | `QThread` | Background thread for graph generation; forwards `progress_signal`, `plot_data_signal`, `finished_signal` from `GraphGenerator` |
 | `LoadingDialog` | `QDialog` | Frameless modal dialog showing `spinning-loading.gif` |
 | `resource_path(relative_path)` | function | Resolves asset paths for both dev (`__file__`) and PyInstaller (`_MEIPASS`) bundle contexts |
-| `open_map_in_browser(map_path)` | function | Opens `map.html` in the system default browser via `webbrowser.open()` |
+| `open_map_in_browser(map_path)` | function | Opens the map HTML file in the system default browser via `webbrowser.open()` |
 
 **Eight workflow steps exposed by the GUI:**
 
@@ -205,7 +205,7 @@ graph_generator_monthly/
 | 2 | Seleccionar Directorio de Salida | — (file dialog) | Stores output directory path |
 | 3 | Selecionar base de datos .csv a graficar | — (file dialog) | Stores CSV path to process |
 | 4 | Generar Graficos mensuales | `graph_generation.py` + `data_processing.py` | HTML + PNG per station |
-| 4b | Generar Mapa de Estaciones | `map_viewer.py` | `<output_dir>/map.html` opened in browser |
+| 4b | Generar Mapa de Estaciones | `map_viewer.py` | `<output_dir>/mapa_{YYYYMMDD}_{YYYYMM}.html` opened in browser |
 | 5 | Explorar graficas generadas | `os.startfile()` | Opens output directory in Explorer |
 | 6 | Seleccionar Archivo de autenticación de cuenta | — (file dialog) | Stores service account JSON path |
 | 7 | Enviar base de datos .csv a INSIVUMEH | `upload_database.py` | CSV uploaded to Google Drive |
@@ -230,6 +230,7 @@ graph_generator_monthly/
 
 | Function | Signature | Description |
 | -------- | --------- | ----------- |
+| `detect_date_format` | `(sample: str) → str` | Returns `'%Y-%m-%d'` or `'%d/%m/%Y'` by inspecting a single `fecha` sample string; shared canonical implementation used by `data_processing`, `map_viewer`, and `gui` |
 | `read_and_prepare_data` | `(csv_path) → DataFrame` | Reads CSV; parses `fecha` with format `%Y/%m/%d` |
 | `prepare_data_for_graphs` | `(df) → DataFrameGroupBy` | Groups entire DataFrame by `Nombre` |
 | `process_grouped_data` | `(name, group, dir_img, dir_html) → dict` | Per-station: filters 30 days, creates and saves Bokeh plot, returns plotting dict |
@@ -249,7 +250,7 @@ graph_generator_monthly/
 
 **Output file naming:** `{output_dir}/html_output/{station_name}_{MM-YYYY}.html`
 
-> `read_and_prepare_data` auto-detects the date format by inspecting the first non-null value in the `fecha` column — `YYYY-MM-DD` (ISO, primary download file) or `DD/MM/YYYY` (local historical copy). Both formats are handled correctly.
+> Date format detection is handled by the shared `detect_date_format(sample)` function (also in `data_processing.py`), which inspects the first non-null value in the `fecha` column — `YYYY-MM-DD` (ISO, primary download file) or `DD/MM/YYYY` (local historical copy). The same function is imported by `map_viewer.py` and `gui.py`.
 
 ---
 
@@ -319,12 +320,12 @@ Each generation run creates a new uniquely named folder — re-running never ove
 
 ### `map_viewer.py` — Folium Station-Network Map
 
-**Purpose:** Reads the CSV, aggregates the last 30 days per station, and generates a single self-contained `map.html` showing all stations on an interactive Leaflet map. The map has multiple switchable layers and a click-popup with all stats per station.
+**Purpose:** Reads the CSV, aggregates the last 30 days per station, and generates a single self-contained `mapa_{YYYYMMDD}_{YYYYMM}.html` showing all stations on an interactive Leaflet map. The map has multiple switchable layers and a click-popup with all stats per station.
 
 | | |
 | --- | --- |
 | **Inputs** | CSV file path (passed to `build_station_summary()`), output directory |
-| **Outputs** | `{output_dir}/map.html` — fully self-contained Leaflet HTML (~650 KB, no server required) |
+| **Outputs** | `{output_dir}/mapa_{YYYYMMDD}_{YYYYMM}.html` — fully self-contained Leaflet HTML (~650 KB, no server required) |
 | **Requirements** | Stations must have non-null `Latitud` and `Longitud` columns |
 
 **Module-level constants:**
@@ -350,13 +351,23 @@ Each generation run creates a new uniquely named folder — re-running never ove
 | Function | Signature | Description |
 | -------- | --------- | ----------- |
 | `build_station_summary` | `(csv_path: str) → DataFrame` | Reads CSV, detects date format, filters last 30 days globally, aggregates per station, attaches lat/lon/alt. Returns one row per station. Raises `ValueError` if no stations have coordinates. |
-| `generate_map` | `(summary: DataFrame, output_dir: str) → str` | Builds Folium map with all layers, saves `map.html`, returns absolute path. |
+| `generate_map` | `(summary: DataFrame, output_dir: str) → str` | Builds Folium map with all layers, saves `mapa_{YYYYMMDD}_{YYYYMM}.html` (dated filename), returns absolute path. |
+
+**Output file naming:**
+
+```text
+mapa_{run_date}_{data_month}.html
+
+Example:  mapa_20260313_202603.html
+           │       │        └─ latest data month in the CSV
+           │       └─ date the map was generated (YYYYMMDD)
+           └─ output type identifier
+```
 
 **Private helpers (not called externally):**
 
 | Function | Description |
 | --- | --- |
-| `_detect_date_format(df)` | Inspects first non-null `fecha` value; returns `%Y-%m-%d` or `%d/%m/%Y` |
 | `_value_to_hex(value, vmin, vmax, cmap_name)` | Scalar → hex colour string via matplotlib colormap. Returns `#aaaaaa` for NaN. |
 | `_value_to_radius(value, vmin, vmax, rmin, rmax)` | Scalar → circle radius using √-scaling |
 | `_popup_html(row)` | `pd.Series` → HTML table string shown in marker popup |
@@ -513,7 +524,7 @@ Older local file with a different structure. Not used by default — only used i
 | Missing columns | `ID_INSIVUMEH` | `Unnamed: 0`, `tsuelo_5` |
 | Approximate rows | 6,600 | 15,000+ |
 
-**Compatibility:** Both `data_processing.py` and `map_viewer.py` auto-detect the date format — both files work correctly with all processing modules.
+**Compatibility:** All processing modules (`data_processing.py`, `map_viewer.py`, `gui.py`) use the shared `detect_date_format` function from `data_processing.py` — both CSV formats work correctly with all modules.
 
 ---
 
@@ -554,7 +565,7 @@ Small sample files (112 and 180 rows respectively) with the same schema as `data
 
 ### 3. Esri tile servers — Map basemaps (read-only, no auth)
 
-Used by `map.html` when opened in a browser. Requires internet access to render tiles.
+Used by the generated map HTML when opened in a browser. Requires internet access to render tiles.
 
 | Tile URL | Layer name |
 | -------- | ---------- |
@@ -582,7 +593,7 @@ OpenStreetMap tiles are also used and are the default basemap.
 | ------ | -------- | ------ | ---- | ----------- |
 | Per-station interactive charts | `<output_dir>/html_output/{station}_{MM-YYYY}.html` | Bokeh HTML | ~50–200 KB each | `data_processing.py` |
 | Per-station static images | `<output_dir>/img_output/{station}.png` | PNG (10×5 in) | ~80–200 KB each | `graph_generation.py` |
-| Network map | `<output_dir>/map.html` | Folium/Leaflet HTML | ~650 KB | `map_viewer.py` |
+| Network map | `<output_dir>/mapa_{YYYYMMDD}_{YYYYMM}.html` | Folium/Leaflet HTML | ~650 KB | `map_viewer.py` |
 | Uploaded CSV on Google Drive | Folder `1YufGqLGRrqpWRyGI_Ltv3pHNyu4MVHRM` | CSV | same as input | `upload_database.py` |
 
 ---
@@ -681,9 +692,9 @@ Main Thread (Qt Event Loop)
      └─ add 5 CircleMarker FeatureGroup layers
      └─ add HeatMap layer
      └─ add LayerControl, title banner, legend hint
-     └─ save → <output_dir>/map.html
+     └─ save → <output_dir>/mapa_{YYYYMMDD}_{YYYYMM}.html
    GUI → open_map_in_browser(map_path)
-     └─ webbrowser.open("file:///...map.html")
+     └─ webbrowser.open("file:///...mapa_*.html")
    Status label: "Mapa generado: 62 estaciones — <path>"
 
 7. STEP 5 – Explore generated graphs
@@ -743,7 +754,7 @@ flowchart TD
         subgraph OUTPUTS["Local output files"]
             HTML_OUT["html_output/\n{station}_{MM-YYYY}.html\n(Bokeh interactive chart)"]
             PNG_OUT["img_output/\n{station}.png\n(matplotlib PNG)"]
-            MAP_OUT["map.html\n(Folium/Leaflet · ~650 KB\n5 variable layers)"]
+            MAP_OUT["mapa_*.html\n(Folium/Leaflet · ~650 KB\n5 variable layers)"]
         end
 
         BROWSER["System default browser\n(webbrowser.open)"]
@@ -796,7 +807,7 @@ data_processing  graph_generation               map_viewer
       │            │                            attach lat/lon/alt
       ▼            ▼                                  │
  html_output/  img_output/                            ▼
- *.html         *.png                         <output_dir>/map.html
+ *.html         *.png                         <output_dir>/mapa_*.html
                                               (5 marker layers +
                                                1 heatmap layer)
                                                       │
