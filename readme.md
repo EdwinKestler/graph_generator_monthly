@@ -110,21 +110,20 @@ graph_generator_monthly/
 ├── map_viewer.py                Folium station-network map generation
 ├── download_database.py         Google Drive public-file downloader
 ├── upload_database.py           Google Drive service-account uploader
-├── test_upload.py               Manual upload smoke-test (dev only, not production)
 │
-├── datos-csv/                   CSV data directory
-│   ├── download-database.csv    Primary working file — downloaded from Google Drive
+├── data/                        CSV data directory
+│   ├── insivumeh_YYYYMMDD_YYYYMM_a_YYYYMM.csv   Primary working file — downloaded from Google Drive
 │   ├── database.csv             Local historical copy (different date format)
 │   ├── onestation.csv           Single-station sample (112 rows, testing only)
 │   └── shortscv.csv             Short sample (180 rows, testing only)
 │
-├── images/                      Bundled UI image assets
+├── assets/                      Bundled UI image assets
 │   ├── logo_insivumeh.png
 │   ├── waterco-logo.png
 │   ├── IUCN_logo.png
 │   └── spinning-loading.gif     Modal loading spinner animation
 │
-├── previoustestcode/            Archived prototype scripts (not used in production)
+├── archive/                     Archived prototype scripts (not used in production)
 │   ├── dataset.py               Original single-threaded Bokeh version
 │   ├── dataset2.py              Humidity-focused variant
 │   ├── dataset_modified.py      Early PyQt6 integration attempt
@@ -132,6 +131,14 @@ graph_generator_monthly/
 │   ├── downloadwithlink.py      Google Drive download prototype
 │   ├── spinner_test_code_min.py Loading spinner UI test
 │   └── testinplot.py            Bokeh + matplotlib plotting tests
+│
+├── dev/                         Development and testing scripts (not used in production)
+│   ├── test_suite.py            Full test suite (14 checks) — run via conda
+│   ├── test_upload.py           Upload smoke-test (hard-coded credentials path)
+│   ├── test_filename.py         Timestamped filename logic smoke-test
+│   ├── test_imports.py          Import sanity check
+│   ├── test_pandas.py           pandas behaviour tests
+│   └── _list_stations.py        Utility: list stations in a CSV
 │
 ├── build/                       PyInstaller build artifacts (auto-generated, git-ignored)
 ├── dist/
@@ -162,7 +169,7 @@ graph_generator_monthly/
 | --- | --- |
 | **Inputs** | None |
 | **Outputs** | Launches the `WeatherGraphsApp` window |
-| **Side effects** | Creates `main_folder/`, `main_folder/datos-csv/`, `main_folder/output-folder/`, `main_folder/images/` if they do not exist |
+| **Side effects** | Creates `main_folder/`, `main_folder/data/`, `main_folder/output-folder/`, `main_folder/assets/` if they do not exist |
 
 | Function | Description |
 | --- | --- |
@@ -187,6 +194,7 @@ graph_generator_monthly/
 | ---- | ---- | ----------- |
 | `WeatherGraphsApp` | `QWidget` | Main window; 8-step workflow, progress bar, status label |
 | `Worker` | `QThread` | Background thread for Google Drive upload (prevents GUI freeze) |
+| `GraphWorker` | `QThread` | Background thread for graph generation; forwards `progress_signal`, `plot_data_signal`, `finished_signal` from `GraphGenerator` |
 | `LoadingDialog` | `QDialog` | Frameless modal dialog showing `spinning-loading.gif` |
 | `open_map_in_browser(map_path)` | function | Opens `map.html` in the system default browser via `webbrowser.open()` |
 
@@ -194,7 +202,7 @@ graph_generator_monthly/
 
 | Step | Button label (ES) | Module called | Output |
 | ---- | ----------------- | ------------- | ------ |
-| 1 | Bajar base de datos Mensual .CSV de INSIVUMEH | `download_database.py` | `datos-csv/download-database.csv` |
+| 1 | Bajar base de datos Mensual .CSV de INSIVUMEH | `download_database.py` | `data/insivumeh_{YYYYMMDD}_{YYYYMM}_a_{YYYYMM}.csv` |
 | 2 | Seleccionar Directorio de Salida | — (file dialog) | Stores output directory path |
 | 3 | Selecionar base de datos .csv a graficar | — (file dialog) | Stores CSV path to process |
 | 4 | Generar Graficos mensuales | `graph_generation.py` + `data_processing.py` | HTML + PNG per station |
@@ -208,7 +216,7 @@ graph_generator_monthly/
 | Value | Purpose |
 | ----- | ------- |
 | `19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y` | Google Drive file ID to download (Step 1) |
-| `datos-csv\download-database.csv` | Default local destination for downloaded file |
+| `data/insivumeh_{YYYYMMDD}_{YYYYMM}_a_{YYYYMM}.csv` | Auto-generated local destination after download (date-stamped) |
 
 ---
 
@@ -242,18 +250,33 @@ graph_generator_monthly/
 
 **Output file naming:** `{output_dir}/html_output/{station_name}_{MM-YYYY}.html`
 
-> **Date format note:** `read_and_prepare_data` uses `format="%Y/%m/%d"`. This works for `database.csv` but will fail on `download-database.csv` (which uses `YYYY-MM-DD`). `map_viewer.py` handles both formats via `_detect_date_format()`.
+> `read_and_prepare_data` auto-detects the date format by inspecting the first non-null value in the `fecha` column — `YYYY-MM-DD` (ISO, primary download file) or `DD/MM/YYYY` (local historical copy). Both formats are handled correctly.
 
 ---
 
 ### `graph_generation.py` — Matplotlib PNG Generation
 
-**Purpose:** Iterates stations and renders a dual-axis static PNG image for each, emitting Qt signals so the GUI can track progress.
+**Purpose:** Iterates stations and renders a three-axis static PNG image for each, emitting Qt signals so the GUI can track progress. Runs inside `GraphWorker` (a `QThread` in `gui.py`) so the GUI event loop is never blocked.
 
 | | |
 | --- | --- |
 | **Inputs** | CSV file path + output directory (passed to `generate_graphs()`); per-station plotting dict (received via `plot_data_signal`) |
 | **Outputs** | PNG files in `{output_dir}/img_output/` |
+
+**Threading model:**
+
+```text
+GUI thread                            GraphWorker thread
+──────────────────────────────────    ──────────────────────────────────────────
+generate_graphs_wrapper()             GraphWorker.run()
+  → GraphWorker.start()         ──►     GraphGenerator.generate_graphs()
+                                          for each station:
+  update_progress() ◄── progress_signal ──  emit progress_signal
+  plot_with_matplotlib() ◄ plot_data_signal   emit plot_data_signal
+  on_graphs_complete() ◄─ finished_signal ──  emit completion_signal
+    hide_loading()
+    enable Explore button
+```
 
 **Class `GraphGenerator(QObject)` — Qt signals:**
 
@@ -266,16 +289,17 @@ graph_generator_monthly/
 | Function | Description |
 | -------- | ----------- |
 | `generate_graphs(output_dir, csv_path)` | Reads CSV, iterates stations, emits all three signals |
-| `plot_with_matplotlib(data_dict)` | Receives dict, creates 10×5 inch dual-axis figure, saves PNG |
+| `plot_with_matplotlib(data_dict)` | Receives dict, creates 12×5 inch three-axis figure, saves PNG; per-station failures are logged as warnings without aborting the loop |
 
 **Matplotlib chart axes:**
 
-| Axis | Column | Style |
-| ---- | ------ | ----- |
-| Left | `lluvia` — precipitation | Solid blue line |
-| Right | `tseca` — mean temp | Solid green line |
-| Right | `tmin` — min temp | Dashed DeepSkyBlue line |
-| Right | `tmax` — max temp | Dashed FireBrick line |
+| Axis position | Column | Y range | Style |
+| ------------- | ------ | ------- | ----- |
+| Left | `lluvia` — precipitation (mm) | −5 to 90 | Solid blue line |
+| Right | `tseca` — mean temp (°C) | −5 to 40 | Solid green line |
+| Right | `tmin` — min temp (°C) | −5 to 40 | Dashed DeepSkyBlue line |
+| Right | `tmax` — max temp (°C) | −5 to 40 | Dashed FireBrick line |
+| Far right (+60 pt) | `hum_rel` — relative humidity (%) | 0 to 100 | Dotted darkorange line |
 
 **Output file naming:** `{output_dir}/img_output/{station_name}.png`
 
@@ -408,7 +432,7 @@ Each CircleMarker has a hover tooltip (station name + value) and a click popup (
 
 ---
 
-### `test_upload.py` — Development Smoke Test
+### `dev/test_upload.py` — Development Smoke Test
 
 **Purpose:** Standalone script to manually test the upload flow outside the GUI.
 
@@ -418,9 +442,21 @@ Each CircleMarker has a hover tooltip (station name + value) and a click popup (
 
 ## Data Files & Schemas
 
-### `datos-csv/download-database.csv` — Primary Working File
+### `data/insivumeh_{YYYYMMDD}_{YYYYMM}_a_{YYYYMM}.csv` — Primary Working File
 
 Source: downloaded from Google Drive in Step 1. This is the file used for all processing.
+
+**Filename format:**
+
+```
+insivumeh_{download_date}_{data_start}_a_{data_end}.csv
+
+Example:  insivumeh_20260313_202304_a_202602.csv
+           │           │         │       └─ latest month in the data
+           │           │         └─ earliest month in the data
+           │           └─ date the file was downloaded (YYYYMMDD)
+           └─ source identifier
+```
 
 | Column | Type | Description |
 | ------ | ---- | ----------- |
@@ -453,11 +489,11 @@ Source: downloaded from Google Drive in Step 1. This is the file used for all pr
 
 ---
 
-### `datos-csv/database.csv` — Local Historical Copy
+### `data/database.csv` — Local Historical Copy
 
 Older local file with a different structure. Not used by default — only used if manually selected in Step 3.
 
-| Difference | `database.csv` | `download-database.csv` |
+| Difference | `database.csv` | primary download file |
 | --- | --- | --- |
 | Date format | `DD/MM/YYYY` | `YYYY-MM-DD` (ISO) |
 | Station ID column | `estacion` | `ID` |
@@ -465,11 +501,11 @@ Older local file with a different structure. Not used by default — only used i
 | Missing columns | `ID_INSIVUMEH` | `Unnamed: 0`, `tsuelo_5` |
 | Approximate rows | 6,600 | 15,000+ |
 
-**Compatibility:** `map_viewer.py` handles both date formats automatically. `data_processing.py` uses `format="%Y/%m/%d"` — correct for this file, wrong for `download-database.csv`.
+**Compatibility:** Both `data_processing.py` and `map_viewer.py` auto-detect the date format — both files work correctly with all processing modules.
 
 ---
 
-### `datos-csv/onestation.csv` and `datos-csv/shortscv.csv`
+### `data/onestation.csv` and `data/shortscv.csv`
 
 Small sample files (112 and 180 rows respectively) with the same schema as `database.csv`. Used only for quick local testing.
 
@@ -486,7 +522,7 @@ Small sample files (112 and 180 rows respectively) with the same schema as `data
 | File ID | `19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y` |
 | Authentication | None (file is publicly shared) |
 | Triggered by | GUI Step 1 |
-| Local destination | `datos-csv/download-database.csv` |
+| Local destination | `data/insivumeh_{YYYYMMDD}_{YYYYMM}_a_{YYYYMM}.csv` (auto-named after download) |
 | Implementation | `download_database.py` — chunked streaming, 32 KB per chunk |
 
 ### 2. Google Drive — Authenticated File Upload
@@ -526,7 +562,7 @@ OpenStreetMap tiles are also used and are the default basemap.
 | Meteorological CSV | Google Drive (Step 1) or local file dialog (Step 3) | CSV | `data_processing.py`, `graph_generation.py`, `map_viewer.py` |
 | Output directory | User via file dialog (Step 2) | Folder path | `graph_generation.py`, `map_viewer.py` |
 | Service account credentials | User via file dialog (Step 6) | JSON | `upload_database.py` |
-| UI image assets | `images/` folder (bundled) | PNG, GIF | `gui.py` |
+| UI image assets | `assets/` folder (bundled) | PNG, GIF | `gui.py` |
 
 ### Outputs
 
@@ -599,7 +635,7 @@ Main Thread (Qt Event Loop)
 2. STEP 1 – Download database
    GUI → download_database.py
      └─ HTTP GET google.com/uc?id=19gcM1e5rb-...
-     └─ Chunked write → datos-csv/download-database.csv
+     └─ Chunked write → data/insivumeh_{YYYYMMDD}_{YYYYMM}_a_{YYYYMM}.csv
    Shows LoadingDialog during download
 
 3. STEP 2 – Select output directory
@@ -665,7 +701,7 @@ Main Thread (Qt Event Loop)
 ```mermaid
 flowchart TD
     subgraph CLOUD_IN["☁️  Google Drive — Public (read-only)"]
-        GD_PUB["File ID: 19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y\ndatos-csv/download-database.csv"]
+        GD_PUB["File ID: 19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y\ninsivumeh_{YYYYMMDD}_{YYYYMM}_a_{YYYYMM}.csv"]
     end
 
     subgraph INSIVUMEH_OPS["🏛  INSIVUMEH Operations"]
@@ -683,7 +719,7 @@ flowchart TD
         end
 
         subgraph CSV_LOCAL["Local CSV store"]
-            CSV["datos-csv/\ndownload-database.csv\n(or user-selected CSV)"]
+            CSV["data/\ninsivumeh_{YYYYMMDD}_{YYYYMM}_a_{YYYYMM}.csv\n(or user-selected CSV)"]
         end
 
         subgraph PROCESSING["Steps 4 / 4b — Process & Visualise"]
@@ -729,7 +765,7 @@ flowchart TD
                    ║  HTTP GET  (requests, 32 KB chunks)
                    ║  download_database.py::download_file_from_google_drive()
                    ▼
-      datos-csv/download-database.csv
+      data/insivumeh_{YYYYMMDD}_{YYYYMM}_a_{YYYYMM}.csv
       columns: fecha · ID · Nombre · lluvia · tmin · tseca · tmax
                eva_tan · eva_piche · hum_rel · bri_solar · nub
                vel_viento · dir_viento · pre_atmos · rad_solar
@@ -870,9 +906,9 @@ Output: `dist/generador_graficos_mensual.exe` (~96 MB, self-contained Windows ex
 
 The `.spec` file bundles these image assets:
 
-- `images/logo_insivumeh.png`
-- `images/waterco-logo.png`
-- `images/IUCN_logo.png`
+- `assets/logo_insivumeh.png`
+- `assets/waterco-logo.png`
+- `assets/IUCN_logo.png`
 
 > **Stale entry point:** The spec file currently references `dataset_modified_multythread.py` as the entry point — that file no longer exists. Update `generador_graficos_mensual.spec` to use `montly_graph.py` before rebuilding. Also add `map_viewer.py` to the `hiddenimports` list if folium is not auto-detected.
 
@@ -911,11 +947,11 @@ Actual versions confirmed working in the `graph_generator` conda environment:
 - Always use the `graph_generator` conda environment. The base Anaconda environment fails due to a NumPy 1.x/2.x ABI conflict in pyarrow.
 - `requirements.txt` is outdated and was generated from the original development environment. Do not use it to recreate the runtime environment; use the conda install commands in [Environment Setup](#environment-setup).
 
-**Date format inconsistency:**
+**Date formats:**
 
-- `download-database.csv` (the primary file): `YYYY-MM-DD`
-- `database.csv` (local historical copy): `DD/MM/YYYY`
-- `data_processing.py` uses `format="%Y/%m/%d"` — this only works for `database.csv`. If you select `download-database.csv` in Step 3 for chart generation, parsing will fail or produce wrong dates. `map_viewer.py` handles both formats correctly via `_detect_date_format()`.
+- Primary download file (`insivumeh_*.csv`): `YYYY-MM-DD` (ISO)
+- Local historical copy (`database.csv`): `DD/MM/YYYY`
+- Both `data_processing.py` and `map_viewer.py` auto-detect the format — no manual adjustment needed when switching between files.
 
 **Google Drive IDs:**
 
@@ -930,10 +966,10 @@ Actual versions confirmed working in the `graph_generator` conda environment:
 1. Update entry point from `dataset_modified_multythread.py` → `montly_graph.py`
 2. Add `map_viewer` to `hiddenimports` and verify `folium` data files are included
 
-**`test_upload.py`:**
+**`dev/test_upload.py`:**
 
 - Contains a hard-coded path to a service account JSON file (`C:\keyfile\clean-trees-410621-753ef42ab44d.json`). Never commit actual credentials. This file is dev scaffolding only.
 
-**`previoustestcode/`:**
+**`archive/`:**
 
 - All scripts in this folder are superseded by the current architecture and not imported by any production code. They are retained for historical reference only.
