@@ -13,7 +13,7 @@ from PyQt6.QtGui import QPixmap, QMovie
 from data_processing import detect_date_format
 from download_database import download_file_from_google_drive
 from graph_generation import GraphGenerator
-from map_viewer import build_station_summary, generate_map
+from map_viewer import build_station_summary, build_station_history, generate_map
 
 # Google Drive file ID for the INSIVUMEH monthly database (Step 1 download)
 GDRIVE_FILE_ID = '19gcM1e5rb-HvJ-MVhNSZgsinNhN0S79Y'
@@ -103,7 +103,8 @@ class MapWorker(QThread):
     def run(self):
         try:
             summary  = build_station_summary(self.csv_file_path)
-            map_path = generate_map(summary, self.output_directory)
+            history  = build_station_history(self.csv_file_path)
+            map_path = generate_map(summary, self.output_directory, history)
             msg      = f'Mapa generado: {len(summary)} estaciones — {map_path}'
             self.finished_signal.emit(map_path, msg)
         except Exception as e:

@@ -30,12 +30,16 @@ Dependencies: folium, matplotlib, pandas, numpy
 (install via the graph_generator conda environment — see readme.md)
 """
 
+import io
+import base64
 import os
 from datetime import date
 import pandas as pd
 import numpy as np
 import matplotlib
 import matplotlib.colors as mcolors
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
 import folium
 from folium.plugins import HeatMap
 from data_processing import detect_date_format
@@ -158,6 +162,88 @@ def build_station_summary(csv_path: str) -> pd.DataFrame:
     return summary
 
 
+def build_station_history(csv_path: str) -> dict:
+    """
+    Read the full CSV and return monthly aggregated history per station.
+
+    Args:
+        csv_path: Path to the meteorological CSV file.
+
+    Returns:
+        dict mapping station Nombre (str) → DataFrame with columns:
+            month, lluvia_total, tseca_mean, tmin_mean, tmax_mean, hum_rel_mean
+        sorted by month ascending.
+    """
+    df = pd.read_csv(csv_path, header=0, low_memory=False)
+    sample = str(df["fecha"].dropna().iloc[0]).strip()
+    df["fecha"] = pd.to_datetime(df["fecha"], format=detect_date_format(sample))
+    df["month"] = df["fecha"].dt.to_period("M").dt.to_timestamp()
+
+    history = {}
+    for name, group in df.groupby("Nombre"):
+        monthly = (
+            group.groupby("month")
+            .agg(
+                lluvia_total=("lluvia", "sum"),
+                tseca_mean=("tseca", "mean"),
+                tmin_mean=("tmin", "mean"),
+                tmax_mean=("tmax", "mean"),
+                hum_rel_mean=("hum_rel", "mean"),
+            )
+            .reset_index()
+            .sort_values("month")
+        )
+        history[name] = monthly
+    return history
+
+
+def _build_sparklines(history: dict) -> dict:
+    """Pre-generate base64 sparkline PNGs for every station in history."""
+    return {name: _sparkline_b64(df) for name, df in history.items()}
+
+
+def _sparkline_b64(monthly_df: pd.DataFrame) -> str:
+    """
+    Render a small dual-axis monthly chart and return it as a base64 PNG string.
+
+    Left axis  – monthly rainfall total (blue bars).
+    Right axis – monthly mean temperature (orange line).
+    Returns empty string if the dataframe has fewer than 2 months.
+    """
+    if monthly_df is None or len(monthly_df) < 2:
+        return ""
+
+    months = monthly_df["month"]
+    lluvia = monthly_df["lluvia_total"].fillna(0)
+    temp   = monthly_df["tseca_mean"]
+
+    fig, ax1 = plt.subplots(figsize=(3.8, 1.8), dpi=90)
+
+    # Rainfall bars (left axis)
+    ax1.bar(months, lluvia, width=20, color="#4a90d9", alpha=0.75)
+    ax1.set_ylabel("mm", fontsize=7, color="#4a90d9")
+    ax1.tick_params(axis="y", labelsize=6, labelcolor="#4a90d9")
+    ax1.tick_params(axis="x", labelsize=6, rotation=45)
+    ax1.xaxis.set_major_locator(mdates.AutoDateLocator())
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%m/%y"))
+
+    # Temperature line (right axis)
+    if temp.notna().any():
+        ax2 = ax1.twinx()
+        ax2.plot(months, temp, color="#e05a2b", linewidth=1.2,
+                 marker="o", markersize=2)
+        ax2.set_ylabel("°C", fontsize=7, color="#e05a2b")
+        ax2.tick_params(axis="y", labelsize=6, labelcolor="#e05a2b")
+
+    fig.tight_layout(pad=0.3)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", dpi=90)
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode("utf-8")
+
+
 # ── Colour / radius helpers ──────────────────────────────────────────────────
 
 def _value_to_hex(value, vmin: float, vmax: float, cmap_name: str) -> str:
@@ -184,7 +270,7 @@ def _value_to_radius(value, vmin: float, vmax: float,
 
 # ── Popup HTML ───────────────────────────────────────────────────────────────
 
-def _popup_html(row: pd.Series) -> str:
+def _popup_html(row: pd.Series, hist_b64: str = "") -> str:
     """Build the HTML content displayed when a station marker is clicked."""
     name = str(row["Nombre"]).replace("_", " ")
     station_id = row.get("station_id", "—")
@@ -220,10 +306,21 @@ def _popup_html(row: pd.Series) -> str:
         f"<tr><td>Días registrados</td><td>{int(row.get('n_days', 0))}</td></tr>",
     ])
 
+    chart_html = ""
+    if hist_b64:
+        chart_html = (
+            "<tr><td colspan='2' style='padding-top:6px'>"
+            "<div style='font-size:10px;color:#555;margin-bottom:2px'>"
+            "Historial mensual &mdash; lluvia (azul) / temp. (naranja)</div>"
+            f"<img src='data:image/png;base64,{hist_b64}' "
+            "style='width:100%;border-radius:3px'></td></tr>"
+        )
+
     return (
         "<div style='font-family:sans-serif;font-size:12px;"
-        "min-width:210px;max-width:260px'>"
-        f"<table style='border-collapse:collapse;width:100%'>{rows_html}</table>"
+        "min-width:210px;max-width:380px'>"
+        f"<table style='border-collapse:collapse;width:100%'>"
+        f"{rows_html}{chart_html}</table>"
         "</div>"
     )
 
@@ -235,6 +332,7 @@ def _add_variable_layer(
     summary: pd.DataFrame,
     var_key: str,
     show: bool = False,
+    sparklines: dict = None,
 ) -> None:
     """Add a FeatureGroup layer to the map for one variable."""
     cfg = VARIABLES[var_key]
@@ -264,6 +362,9 @@ def _add_variable_layer(
             else str(row["Nombre"]).replace("_", " ")
         )
 
+        hist_b64 = (sparklines or {}).get(row["Nombre"], "")
+        popup_width = 390 if hist_b64 else 270
+
         folium.CircleMarker(
             location=[lat, lon],
             radius=radius,
@@ -272,7 +373,7 @@ def _add_variable_layer(
             fill=True,
             fill_color=color,
             fill_opacity=0.85,
-            popup=folium.Popup(_popup_html(row), max_width=270),
+            popup=folium.Popup(_popup_html(row, hist_b64), max_width=popup_width),
             tooltip=tooltip_text,
         ).add_to(fg)
 
@@ -281,13 +382,15 @@ def _add_variable_layer(
 
 # ── Main entry point ──────────────────────────────────────────────────────────
 
-def generate_map(summary: pd.DataFrame, output_dir: str) -> str:
+def generate_map(summary: pd.DataFrame, output_dir: str, history: dict = None) -> str:
     """
     Build a self-contained Folium/Leaflet HTML map of all stations.
 
     Args:
         summary   : Output of build_station_summary().
         output_dir: Directory where map.html will be saved (created if missing).
+        history   : Optional output of build_station_history(). When provided,
+                    each station popup includes an embedded monthly history chart.
 
     Returns:
         Absolute path to the saved map.html file.
@@ -297,6 +400,8 @@ def generate_map(summary: pd.DataFrame, output_dir: str) -> str:
     run_date   = date.today().strftime('%Y%m%d')
     data_month = pd.Timestamp(summary['last_fecha'].max()).strftime('%Y%m')
     map_name   = f"mapa_{run_date}_{data_month}.html"
+
+    sparklines = _build_sparklines(history) if history else {}
 
     m = folium.Map(location=GUATEMALA_CENTER, zoom_start=DEFAULT_ZOOM, tiles=None)
 
@@ -321,7 +426,7 @@ def generate_map(summary: pd.DataFrame, output_dir: str) -> str:
 
     # ── Variable marker layers (first one visible by default) ────────────────
     for i, var_key in enumerate(VARIABLES):
-        _add_variable_layer(m, summary, var_key, show=(i == 0))
+        _add_variable_layer(m, summary, var_key, show=(i == 0), sparklines=sparklines)
 
     # ── Precipitation heatmap (toggle) ───────────────────────────────────────
     heat_data = [
